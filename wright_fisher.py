@@ -102,6 +102,8 @@ class WrightFisher(object):
             fitness = [[self.fitness_func(p) for p in j] for j in payoff]
 
 
+
+
             # Generate offspring population probabilistically based on
             # fitness/avg_fitness
 
