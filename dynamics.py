@@ -3,7 +3,6 @@ from abc import ABCMeta, abstractmethod
 import heapq
 import math
 import numpy as np
-from matplotlib import pyplot as plt
 
 # The precision of the decimal comparison operations this should not need any changing
 DECIMAL_PRECISION = 5
@@ -49,20 +48,24 @@ class DynamicsSim(object):
         self.num_strats = []
         root = self.payoff_matrix[0]
         for i in range(self.num_player_types):
-            root = root[0]
             self.num_strats.append(len(root))
+            root = root[0]
 
+        self.verify_payoff_matrix_dimensions()
+
+    def verify_payoff_matrix_dimensions(self):
         # verify that "depth" of each payoff matrix matches number of elements in player_dist
         for m in self.payoff_matrix:
-            self._verify_dimensions(m, self.num_strats)
+            self._verify_dimensions(m, self.num_strats[:])
 
     def _verify_dimensions(self, m, num_strats):
         if len(num_strats) == 0:
             assert isinstance(m, (int, float))
+            return
         n = num_strats.pop(0)
+        assert n == len(m)
         for i in m:
-            self._verify_dimensions(i, num_strats)
-            assert n == len(i)
+            self._verify_dimensions(i, num_strats[:])
 
     def get_payoff(self, recipient, *strats):
         """

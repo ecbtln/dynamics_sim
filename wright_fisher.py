@@ -9,7 +9,7 @@ GRAPH_COLORS = 'mcrgbyk'
 
 class WrightFisher(DynamicsSim):
     def __init__(self, fitness_func=lambda p, w: math.e**(p*w),  mu=0.05, selection_strength=0.8, *args, **kwargs):
-        super(DynamicsSim, self).__init__(*args, **kwargs)
+        super(WrightFisher, self).__init__(*args, **kwargs)
         self.mu = mu
         self.fitness_func = lambda payoff: fitness_func(payoff, selection_strength)
 
