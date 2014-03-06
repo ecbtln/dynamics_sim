@@ -1,14 +1,12 @@
 __author__ = 'eblubin@mit.edu'
 import math
 import numpy as np
-from dynamics import DynamicsSim, round_individuals
-
-# Colors used to plot the players
-GRAPH_COLORS = 'mcrgbyk'
+from dynamics import DynamicsSim
 
 
 class WrightFisher(DynamicsSim):
     def __init__(self, fitness_func=lambda p, w: math.e**(p*w),  mu=0.05, selection_strength=0.8, *args, **kwargs):
+        # TODO: don't allow pop_size of 0, wright fisher only works with finite pop size
         super(WrightFisher, self).__init__(*args, **kwargs)
         self.mu = mu
         self.fitness_func = lambda payoff: fitness_func(payoff, selection_strength)
@@ -40,7 +38,7 @@ class WrightFisher(DynamicsSim):
                 # distribute player strategies proportional n * f
                 # don't use multinomial, because that adds randomness we don't want yet
             new_player_state *= float(num_players - total_mutations) / new_player_state.sum()
-            new_player_state = np.array(round_individuals(new_player_state))
+            new_player_state = np.array(self.round_individuals(new_player_state))
 
             new_player_state += np.random.multinomial(total_mutations, [1. / num_strats] * num_strats)
             state.append(new_player_state)
