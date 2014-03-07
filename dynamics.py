@@ -3,25 +3,15 @@ from abc import ABCMeta, abstractmethod
 import heapq
 import math
 import numpy as np
-import matplotlib.pyplot as plt
-
-
-# DEFAULT GRAPH OPTIONS, can be overridden
-GRAPH_COLORS = "bgrcmykw"
-GRAPH_X_LABEL = "Generation #"
-GRAPH_Y_LABEL = "Proportion of Population"
-GRAPH_LEGEND_LOCATION = "center right"
-GRAPH_SHOW_GRID = True
-GRAPH_TITLE_FORMAT = "Population Dynamics for Player %d"
 
 # The precision of the decimal comparison operations this should not need any changing
 DECIMAL_PRECISION = 5
 
 
-class DynamicsSim(object):
+class DynamicsSimulator(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, payoff_matrix, player_frequencies, strategy_labels=None, pop_size=100):
+    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100):
         """ set pop_size equal to 0 to use infinite players (where we only care about their relative frequencies) """
 
         assert math.fsum(player_frequencies) == 1.0
@@ -29,33 +19,25 @@ class DynamicsSim(object):
         assert pop_size >= 0
 
         if pop_size > 0:
-            self.num_players = round_individuals([pop_size * x for x in player_frequencies])
+            self.num_players = self.round_individuals([pop_size * x for x in player_frequencies])
             assert sum(self.num_players) == pop_size
             self.infinite_pop_size = False
         else:
             self.num_players = player_frequencies
             self.infinite_pop_size = True
 
-        self.payoff_matrix = payoff_matrix
-        self.num_player_types = len(player_frequencies)
+        self.init_payoff_matrix(len(player_frequencies), payoff_matrix)
 
+
+    def init_payoff_matrix(self, num_players, payoff_matrix):
+        self.num_player_types = num_players
+        self.payoff_matrix = payoff_matrix
         self.num_strats = []
         root = self.payoff_matrix[0]
         for i in range(self.num_player_types):
             self.num_strats.append(len(root))
             root = root[0]
-
         self.verify_payoff_matrix_dimensions()
-
-        if strategy_labels is None:
-            self.labels = [["X_%d" % x for x in range(strats)] for strats in self.num_strats]
-        else:
-            assert len(strategy_labels) == self.num_player_types
-            for p_labels, num_strats in zip(strategy_labels, self.num_strats):
-                assert len(p_labels) == num_strats
-                for label in p_labels:
-                    assert isinstance(label, (str, basestring))
-            self.labels = strategy_labels
 
     def verify_payoff_matrix_dimensions(self):
         # verify that "depth" of each payoff matrix matches number of elements in player_dist
@@ -103,7 +85,7 @@ class DynamicsSim(object):
 
         return s
 
-    def simulate(self, num_gens=100, debug_state=None, graph=False, graph_options=None):
+    def simulate(self, num_gens=100, debug_state=None):
         if debug_state is not None:
             state = self.validate_state(debug_state)
         else:
@@ -126,39 +108,7 @@ class DynamicsSim(object):
             for i, x in enumerate(state):
                 strategies[i][gen + 1, :] = x
 
-        if graph:
-            if graph_options is None:
-                graph_options = {}
-
-            colors = graph_options.get('colors', GRAPH_COLORS)
-
-            # graph the results
-            for i, (player, labels) in enumerate(zip(strategies, self.labels)):
-                plt.title(graph_options.get('title_format', GRAPH_TITLE_FORMAT) % i)
-
-                # iterate over all the generations
-                num_gens, num_strats = player.shape
-
-                plt.xlim([0, num_gens + 2])
-                plt.ylim([0, 1])
-                plt.xlabel(graph_options.get('x_label', GRAPH_X_LABEL))
-                plt.ylabel(graph_options.get('y_label', GRAPH_Y_LABEL))
-                plt.grid(graph_options.get('grid', GRAPH_SHOW_GRID))
-
-                for gen_i in range(num_gens):
-                    # iterate over all the strategies
-                    for strat_i in range(num_strats):
-                        val = player[gen_i, strat_i]
-                        if not self.infinite_pop_size:
-                            # value is in whole number terms, scale to proportions here
-                            pass
-                        plt.scatter(gen_i, val, c=colors[strat_i % num_strats])
-
-                plt.legend(labels, loc=graph_options.get('legend_location', GRAPH_LEGEND_LOCATION))
-                plt.show()
-
-        # return final state after simulation
-        return [x[num_gens] for x in strategies]
+        return state
 
     @staticmethod
     def round_individuals(unrounded_frequencies):

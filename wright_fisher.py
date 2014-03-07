@@ -1,10 +1,10 @@
 __author__ = 'eblubin@mit.edu'
 import math
 import numpy as np
-from dynamics import DynamicsSim
+from dynamics import DynamicsSimulator
 
 
-class WrightFisher(DynamicsSim):
+class WrightFisher(DynamicsSimulator):
     def __init__(self, fitness_func=lambda p, w: math.e**(p*w),  mu=0.05, selection_strength=0.8, *args, **kwargs):
         # TODO: don't allow pop_size of 0, wright fisher only works with finite pop size
         super(WrightFisher, self).__init__(*args, **kwargs)
