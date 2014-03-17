@@ -11,7 +11,8 @@ DECIMAL_PRECISION = 5
 class DynamicsSimulator(object):
     __metaclass__ = ABCMeta
 
-    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100):
+    # TODO: see whether you care about every period or just end state. stochastic vs deterministic
+    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100, stochastic=False):
         """ set pop_size equal to 0 to use infinite players (where we only care about their relative frequencies) """
 
         assert math.fsum(player_frequencies) == 1.0
@@ -27,6 +28,7 @@ class DynamicsSimulator(object):
             self.infinite_pop_size = True
 
         self.init_payoff_matrix(len(player_frequencies), payoff_matrix)
+        self.stochastic = stochastic
 
 
     def init_payoff_matrix(self, num_players, payoff_matrix):
@@ -76,7 +78,7 @@ class DynamicsSimulator(object):
         assert len(s) == self.num_player_types
         for i, (p, expected, n_strats) in enumerate(zip(s, self.num_players, self.num_strats)):
             if isinstance(p, (list, tuple)):
-                p = np.ndarray(p)
+                p = np.array(p)
                 s[i] = p
 
             assert isinstance(p, np.ndarray)
@@ -108,7 +110,7 @@ class DynamicsSimulator(object):
             for i, x in enumerate(state):
                 strategies[i][gen + 1, :] = x
 
-        return state
+        return strategies
 
     @staticmethod
     def round_individuals(unrounded_frequencies):
@@ -136,6 +138,17 @@ class DynamicsSimulator(object):
                                               "before rounding"
 
         return int_num_senders
+
+
+class StochasticDynamicsSimulator(DynamicsSimulator):
+    __metaclass__ = ABCMeta
+
+    def __init__(self, *args, **kwargs):
+        super(StochasticDynamicsSimulator, self).__init__(*args, stochastic=True, **kwargs)
+
+    @abstractmethod
+    def next_generation(self, previous):
+        return []
 
 
 

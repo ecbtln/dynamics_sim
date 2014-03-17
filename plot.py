@@ -15,6 +15,7 @@ class GraphOptions:
                SHOW_GRID_KEY: True,
                TITLE_FORMAT_KEY: "Population Dynamics for Player %d"}
 
+# TODO: frequency of equilibria
 
 def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=lambda player_i, strat_i: "X_%d,%d" % (player_i, strat_i), num_players=None, graph_options=None):
     # data is a list of n = (the number of player types) of 2D arrays
