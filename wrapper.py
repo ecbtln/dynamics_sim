@@ -23,7 +23,7 @@ class GameDynamicsWrapper(object):
 
     def simulate(self, num_gens=100):
         game = self.game_cls(**self.game_kwargs)
-        dyn = self.dynamics_cls(payoff_matrix=game.payoff_matrix,
+        dyn = self.dynamics_cls(payoff_matrix=game.pm,
                                 player_frequencies=game.player_frequencies,
                                 **self.dynamics_kwargs)
         results = dyn.simulate(num_gens=num_gens)

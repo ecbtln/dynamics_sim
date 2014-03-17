@@ -27,44 +27,9 @@ class DynamicsSimulator(object):
             self.num_players = player_frequencies
             self.infinite_pop_size = True
 
-        self.init_payoff_matrix(len(player_frequencies), payoff_matrix)
+        self.pm = payoff_matrix
         self.stochastic = stochastic
 
-
-    def init_payoff_matrix(self, num_players, payoff_matrix):
-        self.num_player_types = num_players
-        self.payoff_matrix = payoff_matrix
-        self.num_strats = []
-        root = self.payoff_matrix[0]
-        for i in range(self.num_player_types):
-            self.num_strats.append(len(root))
-            root = root[0]
-        self.verify_payoff_matrix_dimensions()
-
-    def verify_payoff_matrix_dimensions(self):
-        # verify that "depth" of each payoff matrix matches number of elements in player_dist
-        for m in self.payoff_matrix:
-            self._verify_dimensions(m, self.num_strats[:])
-
-    def _verify_dimensions(self, m, num_strats):
-        if len(num_strats) == 0:
-            assert isinstance(m, (int, float))
-            return
-        n = num_strats.pop(0)
-        assert n == len(m)
-        for i in m:
-            self._verify_dimensions(i, num_strats[:])
-
-    def get_payoff(self, recipient, *strats):
-        """
-        Get the payoff for the player index recipient, by specifiying the strategies that everyone plays in increasing
-        player order
-
-        """
-        matrix = self.payoff_matrix[recipient]
-        for idx in strats:
-            matrix = matrix[idx]
-        return matrix
 
     @abstractmethod
     def next_generation(self, previous):
@@ -75,8 +40,8 @@ class DynamicsSimulator(object):
         Verify validity of state, each state is an array of numpy arrays, one for every player type
         Also needs to coerce any arrays to numpy arrays
         """
-        assert len(s) == self.num_player_types
-        for i, (p, expected, n_strats) in enumerate(zip(s, self.num_players, self.num_strats)):
+        assert len(s) == self.pm.num_player_types
+        for i, (p, expected, n_strats) in enumerate(zip(s, self.num_players, self.pm.num_strats)):
             if isinstance(p, (list, tuple)):
                 p = np.array(p)
                 s[i] = p
@@ -96,9 +61,9 @@ class DynamicsSimulator(object):
             else:
                 distribution_for_player = lambda n_p, n_s: np.random.dirichlet([1] * n_s) * n_p
 
-            state = [distribution_for_player(n_p, n_s) for n_p, n_s in zip(self.num_players, self.num_strats)]
+            state = [distribution_for_player(n_p, n_s) for n_p, n_s in zip(self.num_players, self.pm.num_strats)]
 
-        strategies = [np.zeros((num_gens, x)) for x in self.num_strats]
+        strategies = [np.zeros((num_gens, x)) for x in self.pm.num_strats]
 
         # record initial state
         for i, x in enumerate(state):

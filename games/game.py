@@ -1,15 +1,18 @@
 __author__ = 'elubin'
 
+from dynamics_sim.payoff_matrix import PayoffMatrix
+
 UNCLASSIFIED_EQUILIBRIUM = 'Unclassified'
+
 
 class Game(object):
     DEFAULT_PARAMS = {}
 
-    def __init__(self, payoff_matrix, player_frequencies, equilibrium_tolerance=None):
-        assert payoff_matrix is not None
+    def __init__(self, payoff_matrices, player_frequencies, equilibrium_tolerance=None):
+        assert payoff_matrices is not None
         assert player_frequencies is not None
 
-        self.payoff_matrix = payoff_matrix
+        self.pm = PayoffMatrix(len(player_frequencies), payoff_matrices)
         self.player_frequencies = player_frequencies
         self.equilibrium_tolerance = equilibrium_tolerance
 

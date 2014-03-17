@@ -14,9 +14,9 @@ class WrightFisher(StochasticDynamicsSimulator):
     def next_generation(self, previous_state):
         state = []
         # Calculate expected payoffs each player gets by playing a particular strategy based on the current state
-        payoff = [[self.get_expected_payoff(p_idx, s_idx, previous_state)
+        payoff = [[self.pm.get_expected_payoff(p_idx, s_idx, previous_state)
                    for s_idx in range(num_strats_i)]
-                  for p_idx, num_strats_i in enumerate(self.num_strats)]
+                  for p_idx, num_strats_i in enumerate(self.pm.num_strats)]
 
         # Calculate fitness for each individual in the population (based on what strategy they are playing)
         fitness = [[self.fitness_func(p) for p in j] for j in payoff]
@@ -45,35 +45,6 @@ class WrightFisher(StochasticDynamicsSimulator):
             state.append(new_player_state)
 
         return state
-
-    def get_expected_payoff(self, player_idx, strategy, current_state):
-        return self._iterate_through_players(player_idx, 0, {player_idx: strategy}, 1.0, current_state)
-
-    def _iterate_through_players(self, target_player_idx, current_player_idx, other_player_stategies, probability, current_state):
-        if len(other_player_stategies) == self.num_player_types:
-            strats = [0] * self.num_player_types
-            for i in range(self.num_player_types):
-                strats[i] = other_player_stategies[i]
-
-            payoff = self.get_payoff(target_player_idx, *strats)
-            return payoff * probability
-
-        elif current_player_idx in other_player_stategies:
-            # skip it, we already picked the strategy
-            return self._iterate_through_players(target_player_idx, current_player_idx + 1, other_player_stategies, probability, current_state)
-        else:
-            # iterate over the current player idx dimension, recursively calling yourself on every iteration'
-            payoff = 0
-
-            for strat in range(self.num_strats[current_player_idx]):
-                n = current_state[current_player_idx][strat]
-                p = float(n) / self.num_players[current_player_idx]
-                dict_copy = dict(other_player_stategies.items())
-                dict_copy[current_player_idx] = strat
-                payoff += self._iterate_through_players(target_player_idx, current_player_idx + 1, dict_copy, probability * p, current_state)
-
-            return payoff
-
 
 
 
