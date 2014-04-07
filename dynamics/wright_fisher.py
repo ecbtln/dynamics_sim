@@ -31,7 +31,10 @@ class WrightFisher(StochasticDynamicsSimulator):
                 f = fitness[player_idx][strategy_idx]
 
                 # sample from binomial distribution to get number of mutations for strategy
-                mutations = np.random.binomial(n, self.mu)
+                if n == 0:
+                    mutations = 0
+                else:
+                    mutations = np.random.binomial(n, self.mu)
                 n -= mutations
                 total_mutations += mutations
                 new_player_state[strategy_idx] = n * f

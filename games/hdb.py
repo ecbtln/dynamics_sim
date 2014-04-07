@@ -3,7 +3,8 @@ __author__ = 'elubin'
 
 from game import Game
 
-
+# TODO: experiment with decorators like this
+#@params(v=30, c=60)
 class HawkDoveBourgeois(Game):
     DEFAULT_PARAMS = dict(v=30, c=60)
 
@@ -12,8 +13,6 @@ class HawkDoveBourgeois(Game):
                             (0, v / 2.0, v / 4.0),
                             ((v - c) / 4.0, 3.0 * v / 4.0, v / 2.0))
 
-        payoff_matrix_p2 = tuple(map(tuple, zip(*payoff_matrix_p1))) # transpose
-
-        payoff_matrix = [payoff_matrix_p1, payoff_matrix_p2]
+        payoff_matrix = [payoff_matrix_p1]
         player_dist = (0.5, 0.5)
         super(HawkDoveBourgeois, self).__init__(payoff_matrices=payoff_matrix, player_frequencies=player_dist)

@@ -2,7 +2,6 @@ __author__ = 'elubin'
 
 from game import Game
 
-
 class HawkDove(Game):
     DEFAULT_PARAMS = dict(v=30, c=60)
 

@@ -6,8 +6,10 @@ from results import SingleSimulationOutcome
 
 class GameDynamicsWrapper(object):
     def __init__(self, game_cls, dynamics_cls, game_kwargs=None, dynamics_kwargs=None):
-        if game_kwargs is None:
-            game_kwargs = game_cls.DEFAULT_PARAMS
+        self.game_kwargs = game_cls.DEFAULT_PARAMS
+        if game_kwargs is not None:
+            self.game_kwargs.update(game_kwargs)
+
         if dynamics_kwargs is None:
             dynamics_kwargs = {}
         self.game_cls = game_cls
@@ -43,7 +45,7 @@ class GameDynamicsWrapper(object):
         #     print classification
 
         # TODO graph results
-        plot_data_for_players(results, range(num_gens), "Generation #", dyn.num_players)
+        plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats, num_players=dyn.num_players)
 
 
 class VariedGame(object):

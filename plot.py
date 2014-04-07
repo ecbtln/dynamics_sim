@@ -2,6 +2,7 @@ __author__ = 'elubin'
 
 import matplotlib.pyplot as plt
 
+
 class GraphOptions:
     COLORS_KEY = 'colors'
     Y_LABEL_KEY = 'y_label'
@@ -15,6 +16,7 @@ class GraphOptions:
                SHOW_GRID_KEY: True,
                TITLE_FORMAT_KEY: "Population Dynamics for Player %d"}
 
+
 # TODO: frequency of equilibria
 
 def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=lambda player_i, strat_i: "X_%d,%d" % (player_i, strat_i), num_players=None, graph_options=None):
@@ -26,7 +28,9 @@ def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=la
 
     n_x = len(x_range)
     for player_state, n_strats in zip(data, num_strats):
-        assert player_state.shape == n_x, n_strats
+        n, s = player_state.shape
+        assert n == n_x
+        assert s == n_strats
 
     if num_players is not None:
         assert len(num_players) == len(num_strats)
@@ -40,10 +44,11 @@ def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=la
 
     # graph the results
     for i, player in enumerate(data):
+        plt.figure(i)
         plt.title(graph_options[GraphOptions.TITLE_FORMAT_KEY] % i)
 
         # iterate over all the generations
-        num_gens, num_strats = player.shape
+        num_gens, n_strats = player.shape
 
         plt.xlim([0, num_gens + 2])
         plt.ylim([0, 1])
@@ -55,13 +60,13 @@ def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=la
         # plt.plot(x_axis, avg_costs[: t, sender_type_idx], colors[sender_type_idx], label=lbl)
         for gen_i in range(num_gens):
             # iterate over all the strategies
-            for strat_i in range(num_strats):
+            for strat_i in range(n_strats):
                 val = player[gen_i, strat_i]
                 if num_players is not None:
                     # value is in whole number terms, scale to proportions here
                     val /= float(num_players[i])
-                plt.scatter(gen_i, val, c=colors[strat_i % num_strats])
+                plt.scatter(gen_i, val, c=colors[strat_i % n_strats])
 
-        labels = [strategy_labels(i, j) for j in num_strats]
+        labels = [strategy_labels(i, j) for j in range(n_strats)]
         plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
-        plt.show()
+    plt.show()
