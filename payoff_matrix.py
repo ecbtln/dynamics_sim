@@ -6,14 +6,6 @@ __author__ = 'elubin'
 class PayoffMatrix(object):
     def __init__(self, num_players, payoff_matrices):
         self.num_player_types = num_players
-        if len(payoff_matrices) == 1:
-            # TODO: append as many as specified by num_players! not just one more
-            # just need to think how to "transpose" a multidimensional matrix
-
-            # interpreted as multiple instances of the same player, append the transpose
-            p1 = payoff_matrices[0]
-            p2 = tuple(map(tuple, zip(*p1)))
-            payoff_matrices.append(p2)
 
         self.payoff_matrices = payoff_matrices
         self.num_strats = []

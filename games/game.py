@@ -32,5 +32,21 @@ class Game(object):
         # i.e. params['a'] will return whatever parameter the
         return UNCLASSIFIED_EQUILIBRIUM
 
+# common case is n =2, but we support as big N as needed
+class SymmetricNPlayerGame(Game):
+
+    def __init__(self, payoff_matrix, n):
+        if self.STRATEGY_LABELS is not None:
+            self.STRATEGY_LABELS = (self.STRATEGY_LABELS, ) * n
+
+        # TODO: append as many as specified by num_players! not just one more
+        # TODO: just need to think how to "transpose" a multidimensional matrix
+
+        # interpreted as multiple instances of the same player, append the transpose
+        payoff_matrix_2 = tuple(map(tuple, zip(*payoff_matrix))) # transpose
+        matrices = [payoff_matrix, payoff_matrix_2]
+        player_dist = (0.5, ) * n
+        super(SymmetricNPlayerGame, self).__init__(payoff_matrices=matrices, player_frequencies=player_dist)
+
 
 
