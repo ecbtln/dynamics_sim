@@ -1,6 +1,6 @@
 __author__ = 'elubin'
 
-from plot import plot_data_for_players
+from plot import plot_data_for_players, GraphOptions
 from results import SingleSimulationOutcome
 
 
@@ -13,7 +13,6 @@ class GameDynamicsWrapper(object):
         if dynamics_kwargs is None:
             dynamics_kwargs = {}
         self.game_cls = game_cls
-        self.game_kwargs = game_kwargs
         self.dynamics_cls = dynamics_cls
         self.dynamics_kwargs = dynamics_kwargs
 
@@ -29,7 +28,7 @@ class GameDynamicsWrapper(object):
                                 player_frequencies=game.player_frequencies,
                                 **self.dynamics_kwargs)
         results = dyn.simulate(num_gens=num_gens)
-        results_obj = SingleSimulationOutcome(self.dynamics_cls, self.dynamics_kwargs, self.game_cls, self.game_kwargs, results)
+        #results_obj = SingleSimulationOutcome(self.dynamics_cls, self.dynamics_kwargs, self.game_cls, self.game_kwargs, results)
         # TODO: serialize results to file
         # if dyn.stochastic:
         #     classifications = []
@@ -44,8 +43,17 @@ class GameDynamicsWrapper(object):
         #     classification = game.classify(self.game_kwargs, last_generation_state, game.equilibrium_tolerance)
         #     print classification
 
-        # TODO graph results
-        plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats, num_players=dyn.num_players)
+        graph_options = {}
+        if game.STRATEGY_LABELS is not None:
+            graph_options[GraphOptions.STRATEGY_LABELS_KEY] = lambda p, s: game.STRATEGY_LABELS[p][s]
+
+        if game.PLAYER_LABELS is not None:
+            graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
+
+
+        plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats,
+                              num_players=dyn.num_players,
+                              graph_options=graph_options)
 
 
 class VariedGame(object):

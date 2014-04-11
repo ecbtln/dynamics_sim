@@ -8,23 +8,24 @@ class GraphOptions:
     Y_LABEL_KEY = 'y_label'
     LEGEND_LOCATION_KEY = 'legend_location'
     SHOW_GRID_KEY = 'grid'
-    TITLE_FORMAT_KEY = 'title_format'
+    STRATEGY_LABELS_KEY = 'strategy_labels'
+    TITLE_KEY = 'title'
 
     default = {COLORS_KEY: "bgrcmykw",
                Y_LABEL_KEY: "Proportion of Population",
                LEGEND_LOCATION_KEY: 'center right',
                SHOW_GRID_KEY: True,
-               TITLE_FORMAT_KEY: "Population Dynamics for Player %d"}
+               TITLE_KEY: lambda player_i: "Population Dynamics for Player %d" % player_i,
+               STRATEGY_LABELS_KEY: lambda player_i, strat_i: "X_%d,%d" % (player_i, strat_i)}
 
 
 # TODO: frequency of equilibria
 
-def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=lambda player_i, strat_i: "X_%d,%d" % (player_i, strat_i), num_players=None, graph_options=None):
+def plot_data_for_players(data, x_range, x_label, num_strats, num_players=None, graph_options=None):
     # data is a list of n = (the number of player types) of 2D arrays
     # 1st dimension indices are the index into the x_range array
     # 2nd dimension indices are the index of the strategy number
     # num_players tells us the total number of players devoted to each player type, or None if already normalized
-
 
     n_x = len(x_range)
     for player_state, n_strats in zip(data, num_strats):
@@ -41,11 +42,12 @@ def plot_data_for_players(data, x_range, x_label, num_strats, strategy_labels=la
     graph_options = old_options
 
     colors = graph_options[GraphOptions.COLORS_KEY]
+    strategy_labels = graph_options[GraphOptions.STRATEGY_LABELS_KEY]
 
     # graph the results
     for i, player in enumerate(data):
         plt.figure(i)
-        plt.title(graph_options[GraphOptions.TITLE_FORMAT_KEY] % i)
+        plt.title(graph_options[GraphOptions.TITLE_KEY](i))
 
         # iterate over all the generations
         num_gens, n_strats = player.shape
