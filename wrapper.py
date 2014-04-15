@@ -4,6 +4,12 @@ from plot import plot_data_for_players, GraphOptions
 from results import SingleSimulationOutcome
 
 
+class Obj:
+    def __init__(self, **kwargs):
+        for k in kwargs:
+            setattr(self, k, kwargs[k])
+
+
 class GameDynamicsWrapper(object):
     def __init__(self, game_cls, dynamics_cls, game_kwargs=None, dynamics_kwargs=None):
         self.game_kwargs = game_cls.DEFAULT_PARAMS
@@ -22,7 +28,7 @@ class GameDynamicsWrapper(object):
     def set_dynamics_kwargs(self, **kwargs):
         self.dynamics_kwargs.update(kwargs)
 
-    def simulate(self, num_gens=100):
+    def simulate(self, num_gens=100, graph=True):
         game = self.game_cls(**self.game_kwargs)
         dyn = self.dynamics_cls(payoff_matrix=game.pm,
                                 player_frequencies=game.player_frequencies,
@@ -30,30 +36,52 @@ class GameDynamicsWrapper(object):
         results = dyn.simulate(num_gens=num_gens)
         #results_obj = SingleSimulationOutcome(self.dynamics_cls, self.dynamics_kwargs, self.game_cls, self.game_kwargs, results)
         # TODO: serialize results to file
-        # if dyn.stochastic:
-        #     classifications = []
-        #     frequencies = {}
-        #     for state in results:
-        #         equi = game.classify(self.game_kwargs, state, game.equilibrium_tolerance)
-        #         classifications.append(equi)
-        #         frequencies[equi] = frequencies.get(equi, 0) + 1
-        #     print frequencies
-        # else:
-        #     last_generation_state = results_obj.last_generation()
-        #     classification = game.classify(self.game_kwargs, last_generation_state, game.equilibrium_tolerance)
-        #     print classification
+        params = Obj(**self.game_kwargs)
+        frequencies = {}
+        if dyn.stochastic:
+            classifications = []
+            for state in zip(*results):
+                state = [x / x.sum() for x in state]
+                equi = game.classify(params, state, game.equilibrium_tolerance)
+                classifications.append(equi)
+                frequencies[equi] = frequencies.get(equi, 0) + 1
+        else:
+            last_generation_state = results[-1]
+            classification = game.classify(params, last_generation_state, game.equilibrium_tolerance)
+            frequencies[classification] = 1
 
-        graph_options = {}
-        if game.STRATEGY_LABELS is not None:
-            graph_options[GraphOptions.STRATEGY_LABELS_KEY] = lambda p, s: game.STRATEGY_LABELS[p][s]
+        if graph:
+            graph_options = {}
+            if game.STRATEGY_LABELS is not None:
+                graph_options[GraphOptions.STRATEGY_LABELS_KEY] = lambda p, s: game.STRATEGY_LABELS[p][s]
 
-        if game.PLAYER_LABELS is not None:
-            graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
+            if game.PLAYER_LABELS is not None:
+                graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
 
 
-        plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats,
-                              num_players=dyn.num_players,
-                              graph_options=graph_options)
+            plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats,
+                                  num_players=dyn.num_players,
+                                  graph_options=graph_options)
+        else:
+            return frequencies
+
+    # TODO: have another parameter, parallelize=False
+    def simulate_many(self, num_iterations=1000, num_gens=100):
+        frequencies = {}
+        for iteration in range(num_iterations):
+            results = self.simulate(num_gens=num_gens, graph=False)
+            for k in results:
+                frequencies[k] = frequencies.get(k, 0) + results[k]
+
+        s = 0
+        for k in frequencies:
+            s += frequencies[k]
+
+        for k in frequencies:
+            frequencies[k] /= float(s)
+
+        return frequencies
+
 
 
 class VariedGame(object):

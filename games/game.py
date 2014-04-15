@@ -10,7 +10,7 @@ class Game(object):
     PLAYER_LABELS = None
     STRATEGY_LABELS = None
 
-    def __init__(self, payoff_matrices, player_frequencies, equilibrium_tolerance=None):
+    def __init__(self, payoff_matrices, player_frequencies, equilibrium_tolerance=0.1):
         assert payoff_matrices is not None
         assert player_frequencies is not None
         if self.PLAYER_LABELS is not None:
@@ -31,6 +31,7 @@ class Game(object):
         # params is a dictionary with all of the parameters for the game
         # i.e. params['a'] will return whatever parameter the
         return UNCLASSIFIED_EQUILIBRIUM
+
 
 # common case is n =2, but we support as big N as needed
 class SymmetricNPlayerGame(Game):
