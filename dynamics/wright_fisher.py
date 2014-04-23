@@ -41,7 +41,6 @@ class WrightFisher(StochasticDynamicsSimulator):
                 # distribute player strategies proportional n * f
                 # don't use multinomial, because that adds randomness we don't want yet
             new_player_state *= float(num_players - total_mutations) / new_player_state.sum()
-            # TODO:
             new_player_state = np.array(self.round_individuals(new_player_state))
 
             new_player_state += np.random.multinomial(total_mutations, [1. / num_strats] * num_strats)

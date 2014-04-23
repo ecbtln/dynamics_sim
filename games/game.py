@@ -9,6 +9,7 @@ class Game(object):
     DEFAULT_PARAMS = {}
     PLAYER_LABELS = None
     STRATEGY_LABELS = None
+    EQUILIBRIA_LABELS = ()
 
     def __init__(self, payoff_matrices, player_frequencies, equilibrium_tolerance=0.1):
         assert payoff_matrices is not None
@@ -30,7 +31,17 @@ class Game(object):
         # want the game to support classification of equilibria. The function has
         # params is a dictionary with all of the parameters for the game
         # i.e. params['a'] will return whatever parameter the
-        return UNCLASSIFIED_EQUILIBRIUM
+        return -1
+
+    @classmethod
+    def num_equilibria(cls):
+        return len(cls.EQUILIBRIA_LABELS) + 1
+
+    @classmethod
+    def get_equilibria(cls):
+        return tuple(cls.EQUILIBRIA_LABELS) + (UNCLASSIFIED_EQUILIBRIUM, )
+
+
 
 
 # common case is n =2, but we support as big N as needed

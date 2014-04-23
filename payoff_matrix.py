@@ -62,7 +62,8 @@ class PayoffMatrix(object):
             for strat in range(self.num_strats[current_player_idx]):
                 n = current_state[current_player_idx][strat]
                 p = float(n) / current_state[current_player_idx].sum()
-                dict_copy = dict(other_player_stategies.items())
+                dict_copy = other_player_stategies.copy()
+                #dict_copy = dict(other_player_stategies.items())
                 dict_copy[current_player_idx] = strat
                 payoff += self._iterate_through_players(target_player_idx, current_player_idx + 1, dict_copy, probability * p, current_state)
 
