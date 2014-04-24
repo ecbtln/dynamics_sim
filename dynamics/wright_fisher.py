@@ -5,21 +5,16 @@ from dynamics import StochasticDynamicsSimulator
 
 
 class WrightFisher(StochasticDynamicsSimulator):
-    def __init__(self, fitness_func=lambda p, w: math.e**(p*w),  mu=0.05, selection_strength=0.8, *args, **kwargs):
+    def __init__(self, mu=0.05, *args, **kwargs):
         # TODO: don't allow pop_size of 0, wright fisher only works with finite pop size
         super(WrightFisher, self).__init__(*args, **kwargs)
         self.mu = mu
-        self.fitness_func = lambda payoff: fitness_func(payoff, selection_strength)
+
 
     def next_generation(self, previous_state):
         state = []
-        # Calculate expected payoffs each player gets by playing a particular strategy based on the current state
-        payoff = [[self.pm.get_expected_payoff(p_idx, s_idx, previous_state)
-                   for s_idx in range(num_strats_i)]
-                  for p_idx, num_strats_i in enumerate(self.pm.num_strats)]
 
-        # Calculate fitness for each individual in the population (based on what strategy they are playing)
-        fitness = [[self.fitness_func(p) for p in j] for j in payoff]
+        fitness = self.calculate_fitnesses(previous_state)
 
         # Generate offspring population probabilistically based on
         # fitness/avg_fitness, with some potential for each individual to be mutated

@@ -12,8 +12,12 @@ class DynamicsSimulator(object):
     __metaclass__ = ABCMeta
 
     # TODO: see whether you care about every period or just end state. stochastic vs deterministic
-    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100, stochastic=False):
-        """ set pop_size equal to 0 to use infinite players (where we only care about their relative frequencies) """
+    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100, stochastic=False, hide_markers=False):
+        """ set pop_size equal to 0 to use infinite players (where we only care about their relative frequencies)
+        @param hide_markers: whether or not to hide the markers for a graph and just show the lines, since
+            Moran process, for example, tends to not have drastic spikes and is more smooth
+        @type hide_markers: bool
+        """
 
         assert math.fsum(player_frequencies) == 1.0
 
@@ -26,9 +30,10 @@ class DynamicsSimulator(object):
         else:
             self.num_players = player_frequencies
             self.infinite_pop_size = True
-
+        self.pop_size = pop_size
         self.pm = payoff_matrix
         self.stochastic = stochastic
+        self.hide_markers = hide_markers
 
 
     @abstractmethod
@@ -108,12 +113,30 @@ class DynamicsSimulator(object):
 class StochasticDynamicsSimulator(DynamicsSimulator):
     __metaclass__ = ABCMeta
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, fitness_func=lambda p, w: math.e**(p*w),  selection_strength=0.8,  *args, **kwargs):
+        """
+        The constructor for stochastic dynamics processes. They all reproduce based on relative fitness, so this
+        abstract class provides a convenient fitness calculate function based on the current state using the provided
+        fitness_func.
+
+        @param fitness_func:
+        @type fitness_func: lambda that takes in two arguments, the payoff and the selection strength, and returns the fitness
+        @param selection_strength: the selection strength that will be used in the fitness function
+        @type selection_strength: float
+        """
         super(StochasticDynamicsSimulator, self).__init__(*args, stochastic=True, **kwargs)
+        self.fitness_func = lambda payoff: float(fitness_func(payoff, selection_strength))
+
 
     @abstractmethod
     def next_generation(self, previous):
         return []
 
+    def calculate_fitnesses(self, state):
+        # Calculate expected payoffs each player gets by playing a particular strategy based on the current state
+        payoff = [[self.pm.get_expected_payoff(p_idx, s_idx, state)
+                   for s_idx in range(num_strats_i)]
+                  for p_idx, num_strats_i in enumerate(self.pm.num_strats)]
 
-
+        # Calculate fitness for each individual in the population (based on what strategy they are playing)
+        return [[self.fitness_func(p) for p in j] for j in payoff]

@@ -64,6 +64,8 @@ class GameDynamicsWrapper(object):
             if game.PLAYER_LABELS is not None:
                 graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
 
+            if dyn.hide_markers:
+                graph_options[GraphOptions.NO_MARKERS_KEY] = True
 
             plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats,
                                   num_players=dyn.num_players,
@@ -168,10 +170,8 @@ class VariedGame(object):
         self.dynamics_cls = simulation_cls
         self.dynamics_kwargs = simulation_kwargs if simulation_kwargs is not None else {}
 
-    def vary_param(self, kw, low, high, num_steps, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=True):
-        results = self.vary(game_kwargs={kw: (low, high, num_steps)}, num_iterations=num_iterations, num_gens=num_gens, graph=graph)[0]
-
-        return results
+    def vary_param(self, kw, (low, high, num_steps), num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=True):
+        return self.vary(game_kwargs={kw: (low, high, num_steps)}, num_iterations=num_iterations, num_gens=num_gens, graph=graph)[0]
 
     def vary(self, game_kwargs=None, dynamics_kwargs=None, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=False):
         """
@@ -286,6 +286,7 @@ class VariedGame(object):
             #     results[k] = []
             results.append(r)
 
+            # TODO: fix this mess
             if len(ips) == 1:
                 if len(twod_data) == 0:
 
@@ -298,14 +299,6 @@ class VariedGame(object):
 
         if graph and len(ips) <= 2:
             graph_options = {}
-            # if game.STRATEGY_LABELS is not None:
-            #     graph_options[GraphOptions.STRATEGY_LABELS_KEY] = lambda p, s: game.STRATEGY_LABELS[p][s]
-            #
-            # if game.PLAYER_LABELS is not None:
-            #     graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
-
-
-            # we can only graph up to 1 or 2 varied parameters, so ignore the graph option if there's more
             if len(ips) == 1:
                 graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i: self.game_cls.get_equilibria()[i]
                 plot_single_data_set(twod_data[0], ips[0][0], list(ips[0][1][3]), "Equilibrium Proportion", "Varying values of " + ips[0][0],  self.game_cls.num_equilibria(), graph_options)
@@ -313,7 +306,6 @@ class VariedGame(object):
                 #TODO: 3d graph, not as simple still doable
                 pass
         return results
-
 
     def _vary_for_kwargs(self, ips, idx, perform_sim, varied_vals=None):
         """

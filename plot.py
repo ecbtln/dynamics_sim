@@ -10,16 +10,18 @@ class GraphOptions:
     SHOW_GRID_KEY = 'grid'
     LEGEND_LABELS_KEY = 'legend_labels'
     TITLE_KEY = 'title'
+    MARKERS_KEY = 'markers'
+    NO_MARKERS_KEY = 'hide_markers'
 
-    default = {COLORS_KEY: "bgrcmykw",
+    default = {COLORS_KEY: "bgrmykwc",
+               MARKERS_KEY: "o.v8sh+xD|_ ",
+               NO_MARKERS_KEY: False,
                Y_LABEL_KEY: "Proportion of Population",
                LEGEND_LOCATION_KEY: 'center right',
                SHOW_GRID_KEY: True,
                TITLE_KEY: lambda player_i: "Population Dynamics for Player %d" % player_i,
                LEGEND_LABELS_KEY: lambda graph_i, cat_i: "X_%d,%d" % (graph_i, cat_i)}
 
-
-# TODO: frequency of equilibria
 
 def plot_data_for_players(data, x_range, x_label, num_strats, num_players=None, graph_options=None):
     # data is a list of n = (the number of player types) of 2D arrays
@@ -47,6 +49,7 @@ def plot_single_data_set(data, x_label, x_values, y_label, title, num_categories
     graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i, j: legend_labels(j)
     plot_data([data], x_label, x_values, y_label, lambda i: title, [num_categories], graph_options=graph_options)
 
+
 def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_options=None):
     """
     support for multiple 2d arrays, each as an entry in the data array
@@ -66,6 +69,7 @@ def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_o
 
     colors = graph_options[GraphOptions.COLORS_KEY]
     category_labels = graph_options[GraphOptions.LEGEND_LABELS_KEY]
+    markers = graph_options[GraphOptions.MARKERS_KEY]
 
     # graph the results
     for i, data_i in enumerate(data):
@@ -81,12 +85,13 @@ def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_o
         plt.xlabel(x_label)
         plt.grid(graph_options[GraphOptions.SHOW_GRID_KEY])
 
-        # TODO: change to plot an entire simulation all at once, rather than one point at a time
-        for x_i in range(num_xs):
-            # iterate over all the strategies
-            for cat_i in range(n_cats):
-                val = data_i[x_i, cat_i]
-                plt.scatter(x_values[x_i], val, c=colors[cat_i % n_cats])
+        # iterate over all the categories
+        for cat_i in range(n_cats):
+            if graph_options[GraphOptions.NO_MARKERS_KEY]:
+                marker = ' '
+            else:
+                marker = markers[cat_i / n_cats]
+            plt.plot(x_values, data_i[:, cat_i], c=colors[cat_i % n_cats], lw=2, marker=marker)
 
         labels = [category_labels(i, j) for j in range(n_cats)]
         plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
