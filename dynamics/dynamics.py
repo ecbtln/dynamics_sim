@@ -12,12 +12,7 @@ class DynamicsSimulator(object):
     __metaclass__ = ABCMeta
 
     # TODO: see whether you care about every period or just end state. stochastic vs deterministic
-    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100, stochastic=False, hide_markers=False):
-        """ set pop_size equal to 0 to use infinite players (where we only care about their relative frequencies)
-        @param hide_markers: whether or not to hide the markers for a graph and just show the lines, since
-            Moran process, for example, tends to not have drastic spikes and is more smooth
-        @type hide_markers: bool
-        """
+    def __init__(self, payoff_matrix, player_frequencies=None, pop_size=100, stochastic=False):
 
         assert math.fsum(player_frequencies) == 1.0
 
@@ -33,7 +28,6 @@ class DynamicsSimulator(object):
         self.pop_size = pop_size
         self.pm = payoff_matrix
         self.stochastic = stochastic
-        self.hide_markers = hide_markers
 
 
     @abstractmethod

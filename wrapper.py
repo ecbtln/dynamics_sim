@@ -1,13 +1,16 @@
 __author__ = 'elubin'
 
 from plot import plot_data_for_players, plot_single_data_set, GraphOptions
-from results import SingleSimulationOutcome
+from results import NDimensionalData
 import inspect
 import numpy
+import types, marshal
+from parallel import par_for, delayed, wrapper_simulate, wrapper_vary_for_kwargs
 
 
 DEFAULT_ITERATIONS = 100
 DEFAULT_GENERATIONS = 300
+
 
 class Obj:
     def __init__(self, **kwargs):
@@ -64,8 +67,7 @@ class GameDynamicsWrapper(object):
             if game.PLAYER_LABELS is not None:
                 graph_options[GraphOptions.TITLE_KEY] = lambda p: game.PLAYER_LABELS[p]
 
-            if dyn.hide_markers:
-                graph_options[GraphOptions.NO_MARKERS_KEY] = True
+            graph_options[GraphOptions.NO_MARKERS_KEY] = True
 
             plot_data_for_players(results, range(num_gens), "Generation #", dyn.pm.num_strats,
                                   num_players=dyn.num_players,
@@ -76,12 +78,12 @@ class GameDynamicsWrapper(object):
             else:
                 return frequencies
 
-    # TODO: have another parameter, parallelize=False
-    def simulate_many(self, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, return_labeled=True):
+    def simulate_many(self, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, return_labeled=True, parallelize=True):
         frequencies = numpy.zeros(self.game_cls.num_equilibria())
-        for iteration in range(num_iterations):
-            results = self.simulate(num_gens=num_gens, graph=False, return_labeled=False)
-            frequencies += results
+        output = par_for(parallelize)(delayed(wrapper_simulate)(self, num_gens=num_gens) for iteration in range(num_iterations))
+
+        for x in output:
+            frequencies += x
 
         frequencies /= frequencies.sum()
         if return_labeled:
@@ -96,7 +98,6 @@ class GameDynamicsWrapper(object):
 
     def _convert_equilibria_frequencies(self, frequencies):
         return self._static_convert_equilibria_frequencies(self.game_cls, frequencies)
-
 
 
 class IndependentParameter(object):
@@ -118,12 +119,33 @@ class IndependentParameter(object):
         self.ub = float(ub)
         self.num_steps = num_steps
 
-    def __iter__(self):
-        step = (self.ub - self.lb) / self.num_steps
-        cur = self.lb
-        while cur <= self.ub:
-            yield cur
-            cur += step
+    def _step_size(self):
+        return (self.ub - self.lb) / self.num_steps
+
+    def __getitem__(self, item):
+        if item >= 0 and item <= self.num_steps:
+            return self.lb + item * self._step_size()
+        elif item < 0 and item >= -self.num_steps - 1:
+            return self.ub + (1 + item) * self._step_size()
+        else:
+            raise IndexError
+
+    def __len__(self):
+        return self.num_steps + 1
+
+
+class VerboseIndependentParameter(IndependentParameter):
+    """
+    An extension on the IndependentParameter class that makes room for three other properties
+        - The key that the independent parameter is varying
+        - Whether or not the parameter is direct or indirect (indirect may be used as params to dependent params, but don't directly get applied to the class constructor)
+        - Whether the parameter is for the dynamics or the class constructor
+    """
+    def __init__(self, key, is_direct, is_game_kwarg, *args, **kwargs):
+        self.key = key
+        self.is_direct = is_direct
+        self.is_game_kwarg = is_game_kwarg
+        super(VerboseIndependentParameter, self).__init__(*args, **kwargs)
 
 
 class DependentParameter(object):
@@ -154,6 +176,7 @@ class DependentParameter(object):
 
         In this case
         """
+        assert func.func_closure is None, "In order to support parallelization, the lambda must NOT be a closure. It can only be a function of the parameters to the simulation."
         self.func = func
 
     def get_val(self, **kwargs):
@@ -161,6 +184,14 @@ class DependentParameter(object):
         Evaluate the dependent parameter as a function of the other parameters for the namespace
         """
         return self.func(Obj(**kwargs))
+
+    # Hack to allow portability of lambdas cross-process.
+    # The only requirement is that the function doesn't have a closure, which we check above
+    def __getstate__(self):
+        return {'func': marshal.dumps(self.func.func_code)}
+
+    def __setstate__(self, state):
+        self.func = types.FunctionType(marshal.loads(state['func']), globals())
 
 
 class VariedGame(object):
@@ -170,10 +201,10 @@ class VariedGame(object):
         self.dynamics_cls = simulation_cls
         self.dynamics_kwargs = simulation_kwargs if simulation_kwargs is not None else {}
 
-    def vary_param(self, kw, (low, high, num_steps), num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=True):
-        return self.vary(game_kwargs={kw: (low, high, num_steps)}, num_iterations=num_iterations, num_gens=num_gens, graph=graph)[0]
+    def vary_param(self, kw, (low, high, num_steps), **kwargs):
+        return self.vary(game_kwargs={kw: (low, high, num_steps)}, **kwargs)[0]
 
-    def vary(self, game_kwargs=None, dynamics_kwargs=None, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=False):
+    def vary(self, game_kwargs=None, dynamics_kwargs=None, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=False, parallelize=True):
         """
         We can vary the game kwargs, the dynamics kwargs, as well as any number of indirect inputs, if needed
         Each of these parameters must be an iterable of dictionaries, in the following form:
@@ -196,157 +227,135 @@ class VariedGame(object):
         If the root item is actually a dictionary, and not a list/tuple, then there are assumed to be no dependent kwargs or INDIRECT
         """
         assert not (game_kwargs is None and dynamics_kwargs is None), "nothing to vary!"
-        if game_kwargs is None:
-            game_kwargs = [{}, {}, {}]
-        else:
-            if isinstance(game_kwargs, dict):
-                game_kwargs = [game_kwargs, {}, {}]
+
+        kwargs = [game_kwargs, dynamics_kwargs]
+
+        for j, kw in enumerate(kwargs):
+            if kw is None:
+                kwargs[j] = [{}, {}, {}]
             else:
-                assert isinstance(game_kwargs, (list, tuple))
-                if len(game_kwargs) == 2:
-                    game_kwargs.append({})
-                assert len(game_kwargs) == 3
-                # verify no duplicate keys
-                key_set = set()
+                if isinstance(kw, dict):
+                    kwargs[j] = [kw, {}, {}]
+                else:
+                    assert isinstance(kw, (list, tuple))
+                    if len(kw) == 2:
+                        kw.append({})
+                    assert len(kw) == 3
+                    # verify no duplicate keys
+                    key_set = set()
 
-                for d in game_kwargs:
-                    for k in d:
-                        assert k not in key_set
-                        key_set.add(k)
+                    for d in kw:
+                        for k in d:
+                            assert k not in key_set
+                            key_set.add(k)
 
+        assert len(kwargs[0][0]) > 0 or len(kwargs[1][0]) > 0 or len(kwargs[1][2]) > 0 or len(kwargs[0][2]) > 0, "We don't actually have any parameters to iterate over"
 
-
-        if dynamics_kwargs is None:
-            dynamics_kwargs = [{}, {}, {}]
-        else:
-            if isinstance(game_kwargs, dict):
-                dynamics_kwargs = [dynamics_kwargs, {}, {}]
-            else:
-                assert isinstance(dynamics_kwargs, (list, tuple))
-                if len(dynamics_kwargs) == 2:
-                    game_kwargs.append({})
-                assert len(dynamics_kwargs) == 3
-                # verify no duplicate keys
-                key_set = set()
-
-                for d in dynamics_kwargs:
-                    for k in d:
-                        assert k not in key_set
-                        key_set.add(k)
-
-
-        assert len(game_kwargs[0]) > 0 or len(dynamics_kwargs[0]) > 0 or len(dynamics_kwargs[2]) > 0 or len(game_kwargs[2]) > 0, "We don't actually have any parameters to iterate over"
-
-        local_game_kwarg_copy = self.game_kwargs.copy()
-        game_kwargs_indirect = {}
-        local_dynamic_kwarg_copy = self.dynamics_kwargs.copy()
-        dynamic_kwargs_indirect = {}
-
-
-        for kwargs in (game_kwargs, dynamics_kwargs):
-            for i in (0, 2):
-                for k in kwargs[i]:
-                    v = kwargs[i][k]
+        independent_params = []
+        for i, kw in enumerate(kwargs):
+            for j in (0, 2):
+                for k in kw[j]:
+                    v = kw[j][k]
                     assert len(v) == 3
-                    kwargs[i][k] = IndependentParameter(*v)
-            assert isinstance(kwargs[1], dict)
-            for k in kwargs[1]:
-                v = kwargs[1][k]
+                    ip = VerboseIndependentParameter(k, j == 0, i == 0, *v)
+                    kw[j][k] = ip
+                    independent_params.append(ip)
+            assert isinstance(kw[1], dict)
+            for k in kw[1]:
+                v = kw[1][k]
                 argspec = inspect.getargspec(v)
                 assert len(argspec.args) == 1
-                kwargs[1][k] = DependentParameter(v)
-
-
-        ips = []
-        for outer_idx\
-                , (kwargs, running_kwargs, running_indirect_kwargs) in enumerate(zip((game_kwargs, dynamics_kwargs),
-                                                                                     (local_game_kwarg_copy, local_dynamic_kwarg_copy),
-                                                                                     (game_kwargs_indirect, dynamic_kwargs_indirect))):
-            for i in (0, 2):
-                for k in kwargs[i]:
-                    ip = (k, (running_kwargs, running_indirect_kwargs, kwargs[1], kwargs[i][k], i == 2, outer_idx))
-                    ips.append(ip)
+                kw[1][k] = DependentParameter(v)
 
         w = GameDynamicsWrapper(self.game_cls, self.dynamics_cls, self.game_kwargs, self.dynamics_kwargs)
-        results = []
-        twod_data = []
-        def perform_sim(game_kwargs, dynamics_kwargs):
-            w.update_dynamics_kwargs(local_dynamic_kwarg_copy)
-            w.update_game_kwargs(local_game_kwarg_copy)
-            r = w.simulate_many(num_iterations=num_iterations, num_gens=num_gens, return_labeled=False)
-            g_key = []
-            for k in sorted(game_kwargs):
-                g_key.append((k, game_kwargs[k]))
 
-            d_key = []
-            for k in sorted(dynamics_kwargs):
-                d_key.append((k, dynamics_kwargs[k]))
-            k = (tuple(g_key), tuple(d_key))
-            # if k not in results:
-            #     results[k] = []
-            results.append(r)
+        dependent_params = (kwargs[0][1], kwargs[1][1])
+        results = self._vary_kwargs(independent_params, dependent_params, w, num_iterations=num_iterations, num_gens=num_gens, parallelize=parallelize)
 
-            # TODO: fix this mess
-            if len(ips) == 1:
-                if len(twod_data) == 0:
+        data = NDimensionalData.initialize(results, independent_params)
 
-                    twod_data.append(numpy.zeros((len(list(ips[0][1][3])), self.game_cls.num_equilibria())))
-                    twod_data.append(0)
-                twod_data[0][twod_data[1], :] = r
-                twod_data[1] += 1
+        # TODO: persist results
+        if graph:
+            data.graph(self.game_cls.get_equilibria())
 
-        self._vary_for_kwargs(ips, 0, perform_sim)
-
-        if graph and len(ips) <= 2:
-            graph_options = {}
-            if len(ips) == 1:
-                graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i: self.game_cls.get_equilibria()[i]
-                plot_single_data_set(twod_data[0], ips[0][0], list(ips[0][1][3]), "Equilibrium Proportion", "Varying values of " + ips[0][0],  self.game_cls.num_equilibria(), graph_options)
-            elif len(ips) == 2:
-                #TODO: 3d graph, not as simple still doable
-                pass
         return results
 
-    def _vary_for_kwargs(self, ips, idx, perform_sim, varied_vals=None):
+    def _vary_kwargs(self, ips, dependent_params, sim_wrapper, **kwargs):
+        return self._vary_for_kwargs(ips, 0, dependent_params, sim_wrapper, (), **kwargs)
+
+    def _vary_for_kwargs(self, ips, idx, dependent_params, sim_wrapper, chosen_vals, parallelize=False, **kwargs):
         """
-        Each entry in remaining is a list of (key, (active_kwargs, indirect_kwargs, dict(dependent_parameters), IndependentParameter instance, indirect=true/false, dynamics=true/false))
+        A recursively defined function to iterate over all possible permutations of the variables defined in the list
+        of independent variables that returns the simulation results of the cross product of these variable variations.
+
+        @param ips: a list of all the VerboseIndependentParameters that will be varied
+        @type ips: list(VerboseIndependentParameter)
+        @param idx: the index of the independent parameter about to be iterated upon
+        @type idx: int
+        @param dependent_params: the tuple of dictionaries representing the DependentParameters for the game_kwargs
+            and the dynamics_kwargs, respectively.
+        @type dependent_params: tuple({string: DependentParameter})
+        @param sim_wrapper: the pre-initialized sim-wrapper on which we will call simulate_many
+        @type sim_wrapper: GameDynamicsWrapper
+        @param chosen_vals: a tuple of all the indices of the chosen values for each already-decided independent param
+        @type chosen_vals: tuple(int)
+        @param parallelize: whether or not to parallelize the subloops of this function. We set to true on the parent call
+            and then false for all recursive calls.
+        @type parallelize: bool
+        @param kwargs: These are the rest of the keyword arguments that should be passed directly to the simulate_many function call
+        @rtype: list(list(...))
+        @return: a recursive list of lists representing the simulation results for having assigned each independent parameter
+            the value corresponding to the index at which the simulation results are present in the list of lists.
+
+            i.e. Two independent parameters, the return type will be a list of lists of simulation results
+
+            The simulation result present at the address [4][17] represents the value of the simulation when the first
+            independent parameter was set to its value at index 4 (@see IndependentParameter.__getitem__), and the second
+            independent parameter was set to its value at index 17.
         """
-        if varied_vals is None:
-            varied_vals = [{}, {}]
 
         if idx == len(ips):
-            perform_sim(*varied_vals)
-            return
+            # the list is divided as follows:
+            # [[direct_game_kwargs, indirect_game_kwargs], [direct_dynamics_kwargs, indirect_dynamics_kwargs]]
+            varied_kwargs = [[{}, {}], [{}, {}]]
 
-        key, next = ips[idx]
+            # helper function to return the correct keywords give the desired params
+            def kws(ip):
+                return varied_kwargs[int(not ip.is_direct)][int(not ip.is_game_kwarg)]
 
-        active_kwargs, indirect_kwargs, dependent_parameters, ip, indirect, is_dynamics = next
+            for chosen_idx, ip in zip(chosen_vals, ips):
+                kws(ip)[ip.key] = ip[chosen_idx]
 
-        for v in ip:
-            varied_vals[is_dynamics][key] = v
-            if indirect:
-                indirect_kwargs[key] = v
-            else:
-                active_kwargs[key] = v
+            # the list is organized as follows:
+            # [game_kwargs, dynamics_kwargs]
+            sim_kwargs = [{}, {}]
 
-            # now recalculate all of the dependent parameters, as a function of both independent and indirect params
+            for i in (0, 1):
+                # set all the direct ones
+                for k, v in varied_kwargs[i][0].items():
+                    sim_kwargs[i][k] = v
 
-            for k in dependent_parameters:
-                dp = dependent_parameters[k]
-                kw = indirect_kwargs.copy()
-                kw.update(active_kwargs)
-                # only pass in the values of independent and indirect params, dependent params can't depend on other
-                # dependent ones
-                for temp_key in dependent_parameters:
-                    if temp_key in kw:
-                        del kw[temp_key]
+                # now calculate all of the dependent parameters, as a function of both direct
+                # and indirect independent parameters
+                for k, dp in dependent_params[i].items():
+                    # get the inputs to the dependent param calculation
+                    if i == 0:
+                        dependent_kw_params = sim_wrapper.game_kwargs.copy()
+                    else:
+                        dependent_kw_params = sim_wrapper.dynamics_kwargs.copy()
+                    dependent_kw_params.update(varied_kwargs[i][0])
+                    dependent_kw_params.update(varied_kwargs[i][1])
 
-                if k in kw:
-                    del kw[k]
+                    sim_kwargs[i][k] = dp.get_val(**dependent_kw_params)
 
-                active_kwargs[k] = dp.get_val(**kw)
+            sim_wrapper.update_dynamics_kwargs(sim_kwargs[1])
+            sim_wrapper.update_game_kwargs(sim_kwargs[0])
+            # don't paralellize the simulate_many requests, we are parallelizing higher up in the call chain
+            return sim_wrapper.simulate_many(return_labeled=False, parallelize=False, **kwargs)
 
-            self._vary_for_kwargs(ips, idx + 1, perform_sim, varied_vals)
+        var_indices = xrange(len(ips[idx]))
+        #dependent_params = [{}, {}]
+        return par_for(parallelize)(delayed(wrapper_vary_for_kwargs)(self, ips, idx + 1, dependent_params, sim_wrapper, chosen_vals + (i, ), **kwargs) for i in var_indices)
 
 
 

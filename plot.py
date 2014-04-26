@@ -40,6 +40,10 @@ def plot_data_for_players(data, x_range, x_label, num_strats, num_players=None, 
                     d[gen_i, strat_i] = player[gen_i, strat_i] / float(num_players[i])
             normalized_data.append(d)
         data = normalized_data
+    old_options = GraphOptions.default.copy()
+    if graph_options is not None:
+        old_options.update(graph_options)
+    graph_options = old_options
 
     plot_data(data, x_label, x_range, "Proportion of Population", graph_options[GraphOptions.TITLE_KEY], num_strats, graph_options=graph_options)
 

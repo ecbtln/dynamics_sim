@@ -15,7 +15,7 @@ class Moran(StochasticDynamicsSimulator):
         @param num_iterations_per_time_step: the number of iterations of the Moran process we do per time step
         @type num_iterations_per_time_step: int
         """
-        super(Moran, self).__init__(*args, hide_markers=True, **kwargs)
+        super(Moran, self).__init__(*args, **kwargs)
         assert num_iterations_per_time_step >= 1
         self.num_iterations_per_time_step = num_iterations_per_time_step
 
@@ -32,17 +32,20 @@ class Moran(StochasticDynamicsSimulator):
             for p, f in zip(next_state, fitness):
                 # sample from distribution to determine winner and loser (he who reproduces, he who dies)
                 weighted_total = sum(n_i * f_i for n_i, f_i in zip(p, f))
-                total = p.sum()
-                reproduce = numpy.random.multinomial(1, numpy.array([n_i * f_i / weighted_total for n_i, f_i in zip(p, f)]))
+                dist = numpy.array([n_i * f_i / weighted_total for n_i, f_i in zip(p, f)])
+                reproduce = numpy.random.multinomial(1, dist)
 
                 # temporarily take away the reproducer
                 p -= reproduce
 
                 # now determine who dies from what's left
-                weighted_total = sum(n_i * f_i for n_i, f_i in zip(p, f))
-                death = numpy.random.multinomial(1, numpy.array([n_i * f_i / weighted_total for n_i, f_i in zip(p, f)]))
+                total = p.sum()
 
+                #print [n_i / total for n_i in p]
+                dist = [n_i / float(total) for n_i in p]
+                death = numpy.random.multinomial(1, dist)
                 p += reproduce * 2 - death
+
 
             previous_state = next_state
 
