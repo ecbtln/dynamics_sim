@@ -2,6 +2,7 @@ __author__ = 'elubin'
 
 import matplotlib.pyplot as plt
 import numpy
+from mpl_toolkits.mplot3d import Axes3D
 
 class GraphOptions:
     COLORS_KEY = 'colors'
@@ -53,6 +54,12 @@ def plot_single_data_set(data, x_label, x_values, y_label, title, num_categories
     graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i, j: legend_labels(j)
     plot_data([data], x_label, x_values, y_label, lambda i: title, [num_categories], graph_options=graph_options)
 
+def _append_options(options):
+    old_options = GraphOptions.default.copy()
+    if options is not None:
+        old_options.update(options)
+    return old_options
+
 
 def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_options=None):
     """
@@ -66,10 +73,7 @@ def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_o
         assert n == n_x
         assert s == n_cats
 
-    old_options = GraphOptions.default.copy()
-    if graph_options is not None:
-        old_options.update(graph_options)
-    graph_options = old_options
+    graph_options = _append_options(graph_options)
 
     colors = graph_options[GraphOptions.COLORS_KEY]
     category_labels = graph_options[GraphOptions.LEGEND_LABELS_KEY]
@@ -99,4 +103,47 @@ def plot_data(data, x_label, x_values, y_label, title_i, num_categories, graph_o
 
         labels = [category_labels(i, j) for j in range(n_cats)]
         plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
+    plt.show()
+
+
+def plot_3d_data_set(data, x_label, x_values, y_label, y_values, z_label, title, num_categories, graph_options=None):
+
+    graph_options = _append_options(graph_options)
+    colors = graph_options[GraphOptions.COLORS_KEY]
+    category_labels = graph_options[GraphOptions.LEGEND_LABELS_KEY]
+    plt.close('all')
+    fig = plt.figure()
+
+    # iterate over all the generations
+    num_xs, num_ys, n_cats = data.shape
+    assert num_categories == n_cats
+
+    # iterate over all the categories
+    x_values = numpy.array(x_values)
+    y_values = numpy.array(y_values)
+    nx = len(x_values)
+    ny = len(y_values)
+    assert nx == num_xs
+    assert ny == num_ys
+    xs = numpy.repeat(x_values, ny)
+    xs.resize((nx, ny))
+    ys = numpy.tile(y_values, nx)
+    ys.resize((nx, ny))
+
+    for cat_i in range(n_cats):
+        # print cat_i
+        ax = fig.add_subplot(2, 2, cat_i + 1, projection='3d')
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        zs = data[:, :, cat_i]
+        ax.plot_wireframe(xs, ys, zs, color=colors[cat_i % n_cats])
+
+    # plot_wireframe
+    # TODO: plot surface seems to look better, except it doesn't play nicely with multiple surfaces on the same grpah
+    # for cat_i in range(n_cats):
+    #     zs = data[:, :, cat_i]
+    #     ax.plot_surface(xs, ys, zs, color=colors[cat_i % n_cats])
+
+    labels = [category_labels(j) for j in range(n_cats)]
+    # plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
     plt.show()

@@ -1,5 +1,5 @@
 __author__ = 'elubin'
-from plot import GraphOptions, plot_single_data_set
+from plot import GraphOptions, plot_single_data_set, plot_3d_data_set
 import numpy
 
 # architecture to persist results of a single simulation across many runs
@@ -94,11 +94,26 @@ class TwoDimensionalData(NDimensionalData):
         data = numpy.array(self.data)
         plot_single_data_set(data, x.key, x_values,
                              "Equilibrium Proportion",
-                             "%s:(%.3f...%.3f)" % (x.key, x.lb, x.ub),
+                             "%s:(%.3f ... %.3f)" % (x.key, x.lb, x.ub),
                              n_equilibria, graph_options)
+
 
 class ThreeDimensionalData(NDimensionalData):
     def graph(self, equilibria):
-        pass
+        graph_options = {}
+        graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i: equilibria[i]
+        x = self.independent_parameters[0]
+        y = self.independent_parameters[1]
+        x_values = list(x)
+        y_values = list(y)
+        nx = len(x_values)
+        ny = len(y_values)
+        n_equilibria = len(equilibria)
+        data = numpy.zeros((nx, ny, n_equilibria))
+        for i in range(nx):
+            for j in range(ny):
+                data[i, j, :] = self.data[i][j]
+        plot_3d_data_set(data, x.key, x_values, y.key, y_values, "Equilibrium Proportion", "%s:(%.3f ... %.3f), %s:(%.3f ... %.3f) " % (x.key, x.lb, x.ub, y.key, y.lb, y.ub), n_equilibria, graph_options)
+
 
 

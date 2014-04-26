@@ -202,7 +202,10 @@ class VariedGame(object):
         self.dynamics_kwargs = simulation_kwargs if simulation_kwargs is not None else {}
 
     def vary_param(self, kw, (low, high, num_steps), **kwargs):
-        return self.vary(game_kwargs={kw: (low, high, num_steps)}, **kwargs)[0]
+        return self.vary(game_kwargs={kw: (low, high, num_steps)}, graph=True, **kwargs)
+
+    def vary_2params(self, kw1, (low1, high1, num_steps1), kw2, (low2, high2, num_steps2), **kwargs):
+        return self.vary(game_kwargs={kw1: (low1, high1, num_steps1), kw2: (low2, high2, num_steps2)}, graph=True, **kwargs)
 
     def vary(self, game_kwargs=None, dynamics_kwargs=None, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=False, parallelize=True):
         """

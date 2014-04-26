@@ -17,8 +17,9 @@ def par_for(p=True):
 def wrapper_simulate(wrapper, num_gens):
     return wrapper.simulate(num_gens=num_gens, graph=False, return_labeled=False)
 
-def wrapper_vary_for_kwargs(wrapper, ips, idx, dependent_params, sim_wrapper, chosen_vals, **kwargs):
-    return wrapper._vary_for_kwargs(ips, idx, dependent_params, sim_wrapper, chosen_vals, **kwargs)
+
+def wrapper_vary_for_kwargs(wrapper, *args, **kwargs):
+    return wrapper._vary_for_kwargs(*args, **kwargs)
 
 
 
