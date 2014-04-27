@@ -25,8 +25,8 @@ class Game(object):
         self.player_frequencies = player_frequencies
         self.equilibrium_tolerance = equilibrium_tolerance
 
-    # TODO @staticmethod
-    def classify(self, params, state, tolerance):
+    @classmethod
+    def classify(cls, params, state, tolerance):
         # state is an array of numpy arrays, one for every player type, function should be overriden if you
         # want the game to support classification of equilibria. The function has
         # params is a dictionary with all of the parameters for the game
@@ -40,8 +40,6 @@ class Game(object):
     @classmethod
     def get_equilibria(cls):
         return tuple(cls.EQUILIBRIA_LABELS) + (UNCLASSIFIED_EQUILIBRIUM, )
-
-
 
 
 # common case is n =2, but we support as big N as needed
