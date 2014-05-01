@@ -1,9 +1,12 @@
 __author__ = 'elubin'
 
 
-# a class that helps handling the array of payoff matrices for each player in a game
-
 class PayoffMatrix(object):
+    """
+    A class that encapsulates the notion of a set of payoff matrices for a game (one for each player), and provides
+    convenience methods for getting the payoff for each player given a strategy set, as well as calculating the
+    expected payoff given a distribution of players playing each strategy.
+    """
     def __init__(self, num_players, payoff_matrices):
         self.num_player_types = num_players
 
@@ -16,11 +19,16 @@ class PayoffMatrix(object):
         self.verify_payoff_matrix_dimensions()
 
     def verify_payoff_matrix_dimensions(self):
-        # verify that "depth" of each payoff matrix matches number of elements in player_dist
+        """
+        Verify that "depth" of each payoff matrix matches number of elements in player_dist
+        """
         for m in self.payoff_matrices:
             self._verify_dimensions(m, self.num_strats[:])
 
     def _verify_dimensions(self, m, num_strats):
+        """
+        Recursive helper function to verify the dimensions of the payoff matrix
+        """
         if len(num_strats) == 0:
             assert isinstance(m, (int, float))
             return
@@ -31,9 +39,15 @@ class PayoffMatrix(object):
 
     def get_payoff(self, recipient, *strats):
         """
-        Get the payoff for the player index recipient, by specifiying the strategies that everyone plays in increasing
-        player order
+        Get the payoff for the player index recipient, by specifying the strategies that everyone plays in increasing
+        player order.
 
+        @param recipient: the index of the player for which to get the payoff, 0-indexed
+        @type recipient: int
+        @param strats: the iterable of strategies played by each player, in the order of their indices
+        @type strats: list(int)
+        @return: the payoff that the recipient gets from all playres playing the given strategy
+        @rtype: float
         """
         matrix = self.payoff_matrices[recipient]
         for idx in strats:
@@ -41,6 +55,18 @@ class PayoffMatrix(object):
         return matrix
 
     def get_expected_payoff(self, player_idx, strategy, current_state):
+        """
+        Get the expected payoff if the player at idx player_idx plays indexed by strategy given the current state.
+        @param player_idx: the index of the player for which to get the expected payoff
+        @type player_idx: int
+        @param strategy: the index that the player will play
+        @type strategy: int
+        @param current_state: The state of the population(s). Each entry in the parent array refers to a player type, each entry in each sublist refers to the number or
+            frequency of players playing that strategy.
+        @type current_state: list
+        @return: the expected payoff
+        @rtype: float
+        """
         return self._iterate_through_players(player_idx, 0, {player_idx: strategy}, 1.0, current_state)
 
     def _iterate_through_players(self, target_player_idx, current_player_idx, other_player_stategies, probability, current_state):

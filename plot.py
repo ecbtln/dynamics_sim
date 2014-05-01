@@ -2,7 +2,7 @@ __author__ = 'elubin'
 
 import matplotlib.pyplot as plt
 import numpy
-from mpl_toolkits.mplot3d import Axes3D
+
 
 class GraphOptions:
     COLORS_KEY = 'colors'
@@ -53,6 +53,7 @@ def plot_single_data_set(data, x_label, x_values, y_label, title, num_categories
     legend_labels = graph_options[GraphOptions.LEGEND_LABELS_KEY]
     graph_options[GraphOptions.LEGEND_LABELS_KEY] = lambda i, j: legend_labels(j)
     plot_data([data], x_label, x_values, y_label, lambda i: title, [num_categories], graph_options=graph_options)
+
 
 def _append_options(options):
     old_options = GraphOptions.default.copy()

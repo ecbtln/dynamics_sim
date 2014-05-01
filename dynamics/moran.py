@@ -1,12 +1,11 @@
-import math
 from dynamics import StochasticDynamicsSimulator
 import numpy
 
 
 class Moran(StochasticDynamicsSimulator):
     """
-    A stochastic dynamics simulator that performs the
-    U{Moran Process<http://en.wikipedia.org/wiki/Moran_process#Selection>} on all player types in the population.
+    A stochastic dynamics simulator that performs the Moran process on all player types in the population.
+    See U{Moran Process<http://en.wikipedia.org/wiki/Moran_process#Selection>}
     """
     def __init__(self, num_iterations_per_time_step=1, *args, **kwargs):
         """

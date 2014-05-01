@@ -1,25 +1,35 @@
 __author__ = 'elubin'
 
-from plot import plot_data_for_players, plot_single_data_set, GraphOptions
+from plot import plot_data_for_players, GraphOptions
 from results import NDimensionalData
 import inspect
 import numpy
-import types, marshal
+import types
+import marshal
 from parallel import par_for, delayed, wrapper_simulate, wrapper_vary_for_kwargs
+from util import Obj
 
-
-DEFAULT_ITERATIONS = 100
-DEFAULT_GENERATIONS = 300
-
-
-class Obj:
-    def __init__(self, **kwargs):
-        for k in kwargs:
-            setattr(self, k, kwargs[k])
+DEFAULT_ITERATIONS = 100  #: The default number of iterations for which to run a repeated simulation
+DEFAULT_GENERATIONS = 300  #: the default number of generations for which to run a simulation
 
 
 class GameDynamicsWrapper(object):
+    """
+    A helper class that wraps a dynamics class and a game class and provides helper methods for simulation.
+    """
     def __init__(self, game_cls, dynamics_cls, game_kwargs=None, dynamics_kwargs=None):
+        """
+        Initialize the wrapper with a subclass of Game and DynamicsSimulator, and optional keyword arguments that
+        override the defaults
+        @param game_cls: the game to wrap
+        @type game_cls: L{Game}.__class__
+        @param dynamics_cls: the type of dynamics to use
+        @type dynamics_cls: L{DynamicsSimulator}.__class__
+        @param game_kwargs: any keyword arguments that will be passed to the game class on initialization
+        @type game_kwargs: dict
+        @param dynamics_kwargs: any keyword arguments that will be passed to the dynamics class on initialization
+        @type dynamics_kwargs: dict
+        """
         self.game_kwargs = game_cls.DEFAULT_PARAMS
         if game_kwargs is not None:
             self.game_kwargs.update(game_kwargs)
@@ -31,12 +41,37 @@ class GameDynamicsWrapper(object):
         self.dynamics_kwargs = dynamics_kwargs
 
     def update_game_kwargs(self, *args, **kwargs):
+        """
+        Update the default values of the arguments to the game constructor.
+        @param args: dictionary(s) to update the values with
+        @type args: dict
+        @param kwargs: keys of the dictionary to update.
+        """
         self.game_kwargs.update(*args, **kwargs)
 
     def update_dynamics_kwargs(self, *args, **kwargs):
+        """
+        Update the default values of the arguments to the dynamics constructor.
+        @param args: dictionary(s) to update the values with
+        @type args: dict
+        @param kwargs: keys of the dictionary to update.
+        """
         self.dynamics_kwargs.update(*args, **kwargs)
 
-    def simulate(self, num_gens=100, graph=True, return_labeled=True):
+    def simulate(self, num_gens=DEFAULT_GENERATIONS, graph=True, return_labeled=True):
+        """
+        Simulate the game for the given number of generations with the specified dynamics class and optionally graph the results
+
+        @param num_gens: the number of iterations of the simulation.
+        @type num_gens: int
+        @param graph: whether or not the results should be graphed
+        @type graph: bool
+        @param return_labeled: whether the distribution of classified equilibria that are returned should be labelled
+            or simply listed with their keys inferred by their order
+        @type return_labeled: bool
+        @return: the frequency of time spent in each equilibria, defined by the game
+        @rtype: numpy.ndarray or dict
+        """
         game = self.game_cls(**self.game_kwargs)
         dyn = self.dynamics_cls(payoff_matrix=game.pm,
                                 player_frequencies=game.player_frequencies,
@@ -79,6 +114,24 @@ class GameDynamicsWrapper(object):
                 return frequencies
 
     def simulate_many(self, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, return_labeled=True, parallelize=True):
+        """
+        A helper method to call the simulate methods num_iterations times simulating num_gens generations each time,
+        and then averaging the frequency of the resulting equilibria. Method calls are parallelized and attempt to
+        use all available cores on the machine.
+
+        @param num_iterations: the number of times to iterate the simulation
+        @type num_iterations: int
+        @param num_gens: the number of generations to run each simulation witu
+        @type num_gens: int
+        @param return_labeled: whether the distribution of classified equilibria that are returned should be labelled
+            or simply listed with their keys inferred by their order
+        @type return_labeled: bool
+        @param parallelize: whether or not to parallelize the computation, defaults to true, but an override when
+            varying the parameters, as seen in the L{VariedGame} class to achieve coarser parallelization
+        @type parallelize: bool
+        @return: the frequency of time spent in each equilibria, defined by the game
+        @rtype: numpy.ndarray or dict
+        """
         frequencies = numpy.zeros(self.game_cls.num_equilibria())
         output = par_for(parallelize)(delayed(wrapper_simulate)(self, num_gens=num_gens) for iteration in range(num_iterations))
 
@@ -97,10 +150,16 @@ class GameDynamicsWrapper(object):
         return {label: freq for label, freq in zip(labels, frequencies) if freq > 0}
 
     def _convert_equilibria_frequencies(self, frequencies):
+        """
+        Convert the list of frequencies of equilibria to a dictionary mapping equilibrium name to frequency
+        """
         return self._static_convert_equilibria_frequencies(self.game_cls, frequencies)
 
 
 class IndependentParameter(object):
+    """
+    A class that encapsulates the notion of a parameter that varies from simulation to simulation
+    """
     def __init__(self, lb, ub, num_steps):
         """
         Construct an independent parameter. A varied simulation can have one or more independent parameters. Each
@@ -126,6 +185,7 @@ class IndependentParameter(object):
         if item >= 0 and item <= self.num_steps:
             return self.lb + item * self._step_size()
         elif item < 0 and item >= -self.num_steps - 1:
+            # negative indexing starts from the back
             return self.ub + (1 + item) * self._step_size()
         else:
             raise IndexError
@@ -149,39 +209,27 @@ class VerboseIndependentParameter(IndependentParameter):
 
 
 class DependentParameter(object):
+    """
+    A dependent parameter that is defined as a function of the other parameters in the simulation.
+    """
     def __init__(self, func):
         """
         Each dependent parameter can be a function of both the values of all the other parameters, as well as,
-        any other inputs. Some examples of when it would be easier to have a function of other inputs, not just
-        the parameters is the following example.
+        any other inputs. Due to the fact that in order to parallelize we need to be able to pickle all the arguments,
+        the lambda function is easier to pickle without any closurs. As a result the lambda cannot reference any
+        external variables, besides those passed in as arguments.
 
-        Thus, the passed in function should take three arguments.
-            1. A dictionary of keyword arguments for the game constructor
-            2. A dictionary of keyword arguments for the dynamics constructor
-            3. A dictionary of indirect varied inputs, which may have been created during the varied game
-        % Default values of temptation to defect in other simulations are:
-        >>> default_cl= 4;
-            default_ch= 12;
-
-            % Generate vectors of temptations to defect that maintain mean but change
-            % variance
-            mean_c = p*default_cl + (1-p)*default_ch;
-            cl_lower_bound = 3;
-            cl_upper_bound = 12;
-            ch_lower_bound = (mean_c - p*cl_upper_bound)/(1-p);
-            ch_upper_bound = (mean_c - p*cl_lower_bound)/(1-p);
-
-            cl_range = linspace(cl_upper_bound,cl_lower_bound,num_increments);
-            ch_range = linspace(ch_lower_bound,ch_upper_bound,num_increments);
-
-        In this case
+        @param func: the function mapping fixed parameters to the value that this dependent paramter should take on
+        @type func: lambda
         """
         assert func.func_closure is None, "In order to support parallelization, the lambda must NOT be a closure. It can only be a function of the parameters to the simulation."
         self.func = func
 
     def get_val(self, **kwargs):
         """
-        Evaluate the dependent parameter as a function of the other parameters for the namespace
+        Evaluate the dependent parameter as a function of the other parameters for the namespace.
+
+        @param kwargs: the parameters to be used as input to the dependent variable
         """
         return self.func(Obj(**kwargs))
 
@@ -195,17 +243,77 @@ class DependentParameter(object):
 
 
 class VariedGame(object):
-    def __init__(self, game_cls, simulation_cls, game_kwargs=None, simulation_kwargs=None):
+    """
+    A class that wraps the L{GameDynamicsWrapper} class and simplifies the process of varying multiple parameteres
+    to the simulation at once, and then graphing the effect one or more parameters have on the resulting equilibrium
+    distribution of repeated simulations.
+    """
+    def __init__(self, game_cls, dynamics_cls, game_kwargs=None, dynamics_kwargs=None):
+        """
+        Initialize the wrapper with a subclass of Game and DynamicsSimulator, and optional keyword arguments that
+        override the defaults
+        @param game_cls: the game to wrap
+        @type game_cls: L{Game}.__class__
+        @param dynamics_cls: the type of dynamics to use
+        @type dynamics_cls: L{DynamicsSimulator}.__class__
+        @param game_kwargs: any keyword arguments that will be passed to the game class on initialization
+        @type game_kwargs: dict
+        @param dynamics_kwargs: any keyword arguments that will be passed to the dynamics class on initialization
+        @type dynamics_kwargs: dict
+        """
         self.game_cls = game_cls
         self.game_kwargs = game_kwargs if game_kwargs is not None else {}
-        self.dynamics_cls = simulation_cls
-        self.dynamics_kwargs = simulation_kwargs if simulation_kwargs is not None else {}
+        self.dynamics_cls = dynamics_cls
+        self.dynamics_kwargs = dynamics_kwargs if dynamics_kwargs is not None else {}
 
     def vary_param(self, kw, (low, high, num_steps), **kwargs):
-        return self.vary(game_kwargs={kw: (low, high, num_steps)}, graph=True, **kwargs)
+        """
+        A helper function to vary one parameter of the game instance over a range of values, and graph the results
+
+        @param kw: the keyword to vary
+        @type kw: str
+        @param low: the lower limit (inclusive) of the variation
+        @type low: float or int
+        @param high: the upper limit (inclusive) of the variation
+        @type high: float or int
+        @param num_steps: the number of steps to break the variation into. 1 indicates two total simulations, one at
+            the lower limit and one at the upper limit. Must be larger than one
+        @type num_steps: int
+        @rtype: L{NDimensionalData}
+        @return: the data for the parameter variation for all different values.
+        """
+        if 'graph' not in kwargs:
+            kwargs['graph'] = True
+        return self.vary(game_kwargs={kw: (low, high, num_steps)}, **kwargs)
 
     def vary_2params(self, kw1, (low1, high1, num_steps1), kw2, (low2, high2, num_steps2), **kwargs):
-        return self.vary(game_kwargs={kw1: (low1, high1, num_steps1), kw2: (low2, high2, num_steps2)}, graph=True, **kwargs)
+        """
+        A helper function to vary two parameters of the game instance over an independent range of values, and graph the results.
+
+        @param kw1: the keyword to vary
+        @type kw1: str
+        @param low1: the lower limit (inclusive) of the first variation
+        @type low1: float or int
+        @param high1: the upper limit (inclusive) of the first variation
+        @type high1: float or int
+        @param num_steps1: the number of steps to break the first variation into. 1 indicates two total simulations, one at
+            the lower limit and one at the upper limit. Must be larger than one
+        @type num_steps1: int
+        @param kw2: the lower keyword to vary
+        @type kw2: str
+        @param low2: the lower limit (inclusive) of the second variation
+        @type low2: float or int
+        @param high2: the upper limit (inclusive) of the second variation
+        @type high2: float or int
+        @param num_steps2: the number of steps to break the second variation into. 1 indicates two total simulations, one at
+            the lower limit and one at the upper limit. Must be larger than one
+        @type num_steps2: int
+        @rtype: L{NDimensionalData}
+        @return: the data for the parameter variation for all different values.
+        """
+        if 'graph' not in kwargs:
+            kwargs['graph'] = True
+        return self.vary(game_kwargs={kw1: (low1, high1, num_steps1), kw2: (low2, high2, num_steps2)}, **kwargs)
 
     def vary(self, game_kwargs=None, dynamics_kwargs=None, num_iterations=DEFAULT_ITERATIONS, num_gens=DEFAULT_GENERATIONS, graph=False, parallelize=True):
         """
@@ -281,7 +389,7 @@ class VariedGame(object):
         if graph:
             data.graph(self.game_cls.get_equilibria())
 
-        return results
+        return data
 
     def _vary_kwargs(self, ips, dependent_params, sim_wrapper, **kwargs):
         return self._vary_for_kwargs(ips, 0, dependent_params, sim_wrapper, (), **kwargs)
@@ -292,14 +400,14 @@ class VariedGame(object):
         of independent variables that returns the simulation results of the cross product of these variable variations.
 
         @param ips: a list of all the VerboseIndependentParameters that will be varied
-        @type ips: list(VerboseIndependentParameter)
+        @type ips: list(L{VerboseIndependentParameter})
         @param idx: the index of the independent parameter about to be iterated upon
         @type idx: int
         @param dependent_params: the tuple of dictionaries representing the DependentParameters for the game_kwargs
             and the dynamics_kwargs, respectively.
         @type dependent_params: tuple({string: DependentParameter})
         @param sim_wrapper: the pre-initialized sim-wrapper on which we will call simulate_many
-        @type sim_wrapper: GameDynamicsWrapper
+        @type sim_wrapper: L{GameDynamicsWrapper}
         @param chosen_vals: a tuple of all the indices of the chosen values for each already-decided independent param
         @type chosen_vals: tuple(int)
         @param parallelize: whether or not to parallelize the subloops of this function. We set to true on the parent call
