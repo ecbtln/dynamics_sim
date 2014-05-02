@@ -1,4 +1,4 @@
-A generic, extensible simulation library for evolutionary game theory simulations. DyPy provides [Moran](http://en.wikipedia.org/wiki/Moran_process), and [Wright-Fisher](http://en.wikipedia.org/wiki/Genetic_drift#Wright.E2.80.93Fisher_model) processes, with [Replicator Dynamics](http://en.wikipedia.org/wiki/Replicator_equation) and makes it simple to execute complex and robust simulations across a range of parameters and visualize the results with beautiful graphs.
+A generic, extensible simulation library for evolutionary game theory simulations. DyPy provides [Moran](http://en.wikipedia.org/wiki/Moran_process), and [Wright-Fisher](http://en.wikipedia.org/wiki/Genetic_drift#Wright.E2.80.93Fisher_model) processes, as well as [Replicator Dynamics](http://en.wikipedia.org/wiki/Replicator_equation) and makes it simple to execute complex and robust simulations across a range of parameters and visualize the results with beautiful graphs.
 
 See documentation [here](http://ecbtln.github.io).
 
@@ -20,14 +20,10 @@ Once the game class is defined, choose a dynamics process and execute the desire
 - Repeat a given simulation multiple times and return the frequency of each resulting equilibria.
 - Vary one or more parameters to the dynamics or game constructors and graph the effect of this variation on the resulting equilibria, either in 2D or 2D graphs.
 
+The ```GameDynamicsWrapper``` and ```VariedGame``` classes take care of simplifying the simulation and graphing processes, and automatically parallelize the computations across all available cores.
 
-#### Coming soon
+To see an example, take a look at the [*Cooperate Without Looking*](https://github.com/ecbtln/cwol_sim/blob/master/cwol.py) subclass along with its associated [simulations](https://github.com/ecbtln/cwol_sim/blob/master/test.py).
 
+####Persistence (coming soon)
 
-
-Features
-- Parallel
-- Generic
-- Informative graphs
-- Persist changes (coming soon)
-- Fully supported range of replicator rules
+DyPy decouples the process of simulating with graphing. This encourages users to run long-running simulations and gather tons of data, and then insert and tweak the graph parameters afterwards.
