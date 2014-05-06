@@ -2,7 +2,7 @@ __author__ = 'elubin'
 
 import matplotlib.pyplot as plt
 import numpy
-
+from mpl_toolkits.mplot3d import Axes3D
 
 class GraphOptions:
     COLORS_KEY = 'colors'
@@ -137,14 +137,17 @@ def plot_3d_data_set(data, x_label, x_values, y_label, y_values, z_label, title,
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
         zs = data[:, :, cat_i]
+        ax.set_title(category_labels(cat_i))
         ax.plot_wireframe(xs, ys, zs, color=colors[cat_i % n_cats])
 
+    fig2 = plt.figure()
+    ax = fig2.add_subplot(1, 1, 1, projection='3d')
     # plot_wireframe
     # TODO: plot surface seems to look better, except it doesn't play nicely with multiple surfaces on the same grpah
-    # for cat_i in range(n_cats):
-    #     zs = data[:, :, cat_i]
-    #     ax.plot_surface(xs, ys, zs, color=colors[cat_i % n_cats])
+    for cat_i in range(n_cats):
+        zs = data[:, :, cat_i]
+        ax.plot_wireframe(xs, ys, zs, color=colors[cat_i % n_cats])
 
     labels = [category_labels(j) for j in range(n_cats)]
-    # plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
+    plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
     plt.show()
