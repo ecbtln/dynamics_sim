@@ -1,4 +1,5 @@
 __author__ = 'elubin'
+import numpy
 
 
 class PayoffMatrix(object):
@@ -17,6 +18,7 @@ class PayoffMatrix(object):
             self.num_strats.append(len(root))
             root = root[0]
         self.verify_payoff_matrix_dimensions()
+        self.compute_dominated_strategies()
 
     def verify_payoff_matrix_dimensions(self):
         """
@@ -94,3 +96,112 @@ class PayoffMatrix(object):
                 payoff += self._iterate_through_players(target_player_idx, current_player_idx + 1, dict_copy, probability * p, current_state)
 
             return payoff
+
+    def get_all_strategy_tuples(self):
+        """
+        @return: a generator of all strategy tuples representing non-mixed strategies for all players
+        @rtype: generator
+        """
+        return self._strategy_tuple_helper(0, ())
+
+    def _strategy_tuple_helper(self, p, s):
+        if p == self.num_player_types:
+            yield s
+            return
+
+        for s_i in range(self.num_strats[p]):
+            for r in self._strategy_tuple_helper(p + 1, s + (s_i, )):
+                yield r
+
+    def compute_dominated_strategies(self):
+        # for every strategy for every player, iterate through all strategies for all other players and see if there are
+        # any strategies that are completely dominated by other strategies
+        # dominated is a dictionary of sets
+
+        # we have a loop to simulate the iterated elimination of dominated strategies
+        continue_iterating = True
+        dominated_strategies = set()
+
+        while continue_iterating:
+            continue_iterating = False
+            for p_i in range(self.num_player_types):
+                payoffs = []
+                for s_i in range(self.num_strats[p_i]):
+                    payoffs.append(numpy.array(self._get_all_payoffs(p_i, s_i, dominated_strategies)))
+
+
+                for s_1 in range(self.num_strats[p_i]):
+                    if (p_i, s_1) in dominated_strategies:
+                        continue
+                    # consider s_1 as a dominated strategy
+                    for s_2 in range(self.num_strats[p_i]):
+                        # if s_2 is dominated, we can ignore it. can't both be be dominated and dominate another one
+                        if (p_i, s_2) in dominated_strategies:
+                            continue
+
+                        if (payoffs[s_2] > payoffs[s_1]).all():
+                            dominated_strategies.add((p_i, s_1))
+                            continue_iterating = True
+                            break
+
+        self.dominated_strategies = dominated_strategies
+
+
+
+
+    def _get_all_payoffs(self, p, s, dominated):
+        # get a list of all possible payoffs a given player can get for playing a given strategy
+        # the list is computed in order, by iterating through all the other strategy pairs for all the other players
+        # TODO need to ignore payoffs for dominated strategies
+        return list(self._get_all_payoffs_helper(p, s, 0, (), dominated))
+
+
+    def _get_all_payoffs_helper(self, p, s, cur_p, cur_s, dominated):
+        if cur_p == self.num_player_types:
+            yield self.get_payoff(p, *cur_s)
+            return
+        elif cur_p == p:
+            for r in self._get_all_payoffs_helper(p, s, cur_p + 1, cur_s + (s, ), dominated):
+                yield r
+            return
+        else:
+            for s_i in range(self.num_strats[cur_p]):
+                if (cur_p, s_i) in dominated:
+                    continue
+                for r in self._get_all_payoffs_helper(p, s, cur_p + 1, cur_s + (s_i, ), dominated):
+                    yield r
+
+
+    def is_pure_equilibrium(self, s):
+        assert self.num_player_types == len(s)
+        strategies = list(s)
+        for n_i in range(self.num_player_types):
+
+            best_payoff = self.get_payoff(n_i, *s)
+            for s_i in range(self.num_strats[n_i]):
+                if s_i == s[n_i]:
+                    continue
+                strategies[n_i] = s_i
+                p = self.get_payoff(n_i, *strategies)
+                if p > best_payoff:
+                    print n_i, s_i
+                    print s
+                    print p
+                    print self.payoff_matrices
+                    return False
+
+
+            strategies[n_i] = s[n_i]
+
+        return True
+
+    def is_mixed_equilibrium(self, s):
+        assert self.num_player_types == len(s)
+        for n_i in range(self.num_player_types):
+            payoffs = []
+            for i, s_i in enumerate(s[n_i]):
+                if s_i > 0:
+                    # get expected payoff of mixing this strategy
+                    payoffs.append(self.get_expected_payoff(n_i, i, s))
+            if len(payoffs) > 1:
+                assert numpy.allclose()

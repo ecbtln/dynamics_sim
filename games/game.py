@@ -1,7 +1,8 @@
 __author__ = 'elubin'
 
 from dynamics_sim.payoff_matrix import PayoffMatrix
-
+from dynamics_sim.util import Obj
+import numpy
 
 UNCLASSIFIED_EQUILIBRIUM = 'Unclassified'  #: the string used to identify an equilibrium that did not match any of the classification rules
 
@@ -80,6 +81,37 @@ class Game(object):
         @rtype: tuple
         """
         return tuple(cls.EQUILIBRIA_LABELS) + (UNCLASSIFIED_EQUILIBRIUM, )
+
+    @classmethod
+    def validate_classifier(cls, timeout=None, **kwargs):
+        game_kwargs = cls.DEFAULT_PARAMS
+        game_kwargs.update(kwargs)
+        g = cls(**game_kwargs)
+        params = Obj(**game_kwargs)
+        tolerance = 0.05
+
+        def generate_state_from_pure_strategy(p_idx, n_strategies):
+            s = numpy.zeros((n_strategies, ))
+            s[p_idx] = 1.0
+            return s
+        n_players = g.pm.num_player_types
+        # 1. first validate all pure strategy equilibria (non mixed) by iterating through all permutations of all strategies
+        for perm in g.pm.get_all_strategy_tuples():
+            assert len(perm) == n_players
+            state = []
+            for i, s in enumerate(perm):
+                state.append(generate_state_from_pure_strategy(s, g.pm.num_strats[i]))
+            eq = cls.classify(params, state, tolerance)
+            is_eq = g.pm.is_pure_equilibrium(perm)
+            if is_eq:
+                assert eq != -1,  "For the parameters (%s), the %s classifier failed to classify the state %s as " \
+                                  "an equilibrium" % (game_kwargs, cls.__class__, state)
+            else:
+                assert eq == -1, "For the parameters (%s), the %s classifier classified the state %s as " \
+                                 "an equilibrium (%s), even though it isn't one" % (game_kwargs, g.__class__.__name__, state, cls.EQUILIBRIA_LABELS[eq])
+
+
+
 
 
 # common case is n =2, but we support as big N as needed
