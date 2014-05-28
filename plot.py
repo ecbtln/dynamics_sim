@@ -148,6 +148,8 @@ def plot_3d_data_set(data, x_label, x_values, y_label, y_values, z_label, title,
     for cat_i in range(n_cats):
         zs = data[:, :, cat_i]
         ax.plot_wireframe(xs, ys, zs, color=colors[cat_i % n_cats])
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
 
     labels = [category_labels(j) for j in range(n_cats)]
     plt.legend(labels, loc=graph_options[GraphOptions.LEGEND_LOCATION_KEY])
