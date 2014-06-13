@@ -143,7 +143,7 @@ class PayoffMatrix(object):
                             dominated_strategies.add((p_i, s_1))
                             continue_iterating = True
                             break
-
+        # (player index, strategy) index set of tuples of dominated strategies
         self.dominated_strategies = dominated_strategies
 
 
@@ -171,8 +171,8 @@ class PayoffMatrix(object):
                 for r in self._get_all_payoffs_helper(p, s, cur_p + 1, cur_s + (s_i, ), dominated):
                     yield r
 
-
     def is_pure_equilibrium(self, s):
+
         assert self.num_player_types == len(s)
         strategies = list(s)
         for n_i in range(self.num_player_types):
@@ -184,12 +184,12 @@ class PayoffMatrix(object):
                 strategies[n_i] = s_i
                 p = self.get_payoff(n_i, *strategies)
                 if p > best_payoff:
-                    print n_i, s_i
-                    print s
-                    print p
-                    print self.payoff_matrices
+                    # print 'Testing if ' + str(s) + ' is a pure equilibrium'
+                    # print 'Player %d' % n_i
+                    # print 'Current payoff: %f' % best_payoff
+                    # print 'Can get payoff %f by switching to strategy %d' % (p, s_i)
+                    # print self.payoff_matrices
                     return False
-
 
             strategies[n_i] = s[n_i]
 
@@ -203,5 +203,27 @@ class PayoffMatrix(object):
                 if s_i > 0:
                     # get expected payoff of mixing this strategy
                     payoffs.append(self.get_expected_payoff(n_i, i, s))
+
             if len(payoffs) > 1:
-                assert numpy.allclose()
+                first = payoffs[0]
+                for p in payoffs[1:]:
+                    if abs(p - first) > (1e-08 + 1e-05 * abs(first)):
+                        return False
+            else:
+                # only one strategy, this is pure equilibrium
+                # check to make sure there's no incentive of switching strategies
+
+                # get index of pure strategy
+                s_idx = [i for i, x in enumerate(s[n_i]) if s[n_i][i] > 0][0]
+
+                best_payoff = self.get_expected_payoff(n_i, s_idx, s)
+                for s_i in range(self.num_strats[n_i]):
+                    if s_i == s_idx:
+                        continue
+                    p = self.get_expected_payoff(n_i, s_i, s)
+                    if p > best_payoff:
+                        # print n_i, s_i
+                        # print s
+                        # print p
+                        # print self.payoff_matrices
+                        return False

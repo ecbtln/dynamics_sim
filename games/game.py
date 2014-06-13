@@ -3,6 +3,10 @@ __author__ = 'elubin'
 from dynamics_sim.payoff_matrix import PayoffMatrix
 from dynamics_sim.util import Obj
 import numpy
+import itertools
+import time
+from dynamics_sim.parallel import par_for, delayed
+import multiprocessing
 
 UNCLASSIFIED_EQUILIBRIUM = 'Unclassified'  #: the string used to identify an equilibrium that did not match any of the classification rules
 
@@ -82,18 +86,27 @@ class Game(object):
         """
         return tuple(cls.EQUILIBRIA_LABELS) + (UNCLASSIFIED_EQUILIBRIUM, )
 
+
+    # TODO: distribute on 4 cores
     @classmethod
-    def validate_classifier(cls, timeout=None, **kwargs):
+    def validate_classifier(cls, timeout=None, tolerance=0.05, **kwargs):
         game_kwargs = cls.DEFAULT_PARAMS
         game_kwargs.update(kwargs)
         g = cls(**game_kwargs)
         params = Obj(**game_kwargs)
-        tolerance = 0.05
 
         def generate_state_from_pure_strategy(p_idx, n_strategies):
             s = numpy.zeros((n_strategies, ))
             s[p_idx] = 1.0
             return s
+
+        def convert_state(s):
+            return [{cls.STRATEGY_LABELS[j][i]: s_i[i] for i in range(len(s_i)) if s_i[i] > 0} for j, s_i in enumerate(s)]
+
+
+        false_negatives = []
+        false_positives = []
+
         n_players = g.pm.num_player_types
         # 1. first validate all pure strategy equilibria (non mixed) by iterating through all permutations of all strategies
         for perm in g.pm.get_all_strategy_tuples():
@@ -101,17 +114,114 @@ class Game(object):
             state = []
             for i, s in enumerate(perm):
                 state.append(generate_state_from_pure_strategy(s, g.pm.num_strats[i]))
+
             eq = cls.classify(params, state, tolerance)
             is_eq = g.pm.is_pure_equilibrium(perm)
             if is_eq:
-                assert eq != -1,  "For the parameters (%s), the %s classifier failed to classify the state %s as " \
-                                  "an equilibrium" % (game_kwargs, cls.__class__, state)
+                if eq == -1:
+                    false_negatives.append(state)
+                # assert eq != -1,
             else:
-                assert eq == -1, "For the parameters (%s), the %s classifier classified the state %s as " \
-                                 "an equilibrium (%s), even though it isn't one" % (game_kwargs, g.__class__.__name__, state, cls.EQUILIBRIA_LABELS[eq])
+                if eq != -1:
+                    false_positives.append((state, eq))
+
+                # assert eq == -1,
+                #
 
 
+        def print_results(false_negatives, false_positives):
 
+            if len(false_negatives) > 0:
+                print "False negatives:"
+
+                for fn in false_negatives:
+                    print "For the parameters (%s), the %s classifier failed to classify the state %s as an equilibrium" % \
+                          (game_kwargs, cls.__class__.__name__, convert_state(fn))
+
+            if len(false_positives) > 0:
+                print "False positives:"
+                for state, eq in false_positives:
+                    print "For the parameters (%s), the %s classifier classified the state %s as an equilibrium (%s), even though it isn't one" % \
+                        (game_kwargs, g.__class__.__name__, convert_state(state), cls.EQUILIBRIA_LABELS[eq])
+
+        def generate_strat_mixins(n_strats, p_i, prefix):
+            if len(prefix) == n_strats:
+                yield prefix
+                return
+            if (p_i, len(prefix)) in g.pm.dominated_strategies:
+                choices = [False]
+            else:
+                choices = [False, True]
+
+            for c in choices:
+                for mix in generate_strat_mixins(n_strats, p_i, prefix + (c, )):
+                    if any(mix):
+                        yield mix
+
+        # for all players, generate all possible mixes of available strategies that are not dominated strategies
+        strategy_permutations = []
+        for p_i in range(n_players):
+            n_strats = g.pm.num_strats[p_i]
+            strategy_permutations.append(list(generate_strat_mixins(n_strats, p_i, ())))
+
+        prod = itertools.product(*strategy_permutations)
+
+        def mix_over_strategies(s_tuple):
+            n = sum(int(x) for x in s_tuple)
+            r = numpy.random.dirichlet([1] * n)
+            mix_idx = 0
+            state_partition = numpy.zeros((len(s_tuple, )))
+            for i, should_mix in enumerate(s_tuple):
+                if should_mix:
+                    state_partition[i] = r[mix_idx]
+                    mix_idx += 1
+            return state_partition
+
+        # start the timer
+        start = time.time()
+
+        # while the timer hasn't run out
+        ATTEMPTS_PER_PERMUTATION = 10
+
+        def should_end():
+            if timeout is None:
+                return False
+            else:
+                return time.time() - start > timeout
+
+        def do_work():
+            while not should_end():
+                for i in range(ATTEMPTS_PER_PERMUTATION):
+                    for perm in prod:
+                        # if none are mixed strategies, then skip
+                        mixed = False
+                        for s_tuple in perm:
+                            n = sum(int(x) for x in s_tuple)
+                            if n > 1:
+                                mixed = True
+
+                        if not mixed:
+                            continue
+
+                        state = [mix_over_strategies(player_strats) for player_strats in perm]
+
+                        eq = cls.classify(params, state, tolerance)
+                        is_eq = g.pm.is_mixed_equilibrium(state)
+                        if is_eq:
+                            if eq == -1:
+                                false_negatives.append(state)
+                            # assert eq != -1,  "For the parameters (%s), the %s classifier failed to classify the state %s as " \
+                            #                   "an equilibrium" % (game_kwargs, cls.__class__, convert_state(state))
+                        else:
+                            if eq != -1:
+                                false_positives.append((state, eq))
+                            # assert eq == -1, "For the parameters (%s), the %s classifier classified the state %s as " \
+                            #                  "an equilibrium (%s), even though it isn't one" % (game_kwargs, g.__class__.__name__, convert_state(state), cls.EQUILIBRIA_LABELS[eq])
+
+        do_work()
+
+        print_results(false_negatives, false_positives)
+        #par_for()(delayed(do_work)() for _ in range(multiprocessing.cpu_count()))
 
 
 # common case is n =2, but we support as big N as needed
