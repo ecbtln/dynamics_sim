@@ -8,6 +8,7 @@ import time
 import tempfile
 import StringIO
 import os
+import logging
 from dynamics_sim.parallel import par_for, delayed
 import multiprocessing
 
@@ -24,6 +25,7 @@ class Game(object):
     PLAYER_LABELS = None  #: a list of labels to apply to each player in the game, used in graphing
     STRATEGY_LABELS = None  #: a list of lists of strings that name the available strategies for each player
     EQUILIBRIA_LABELS = ()  #: a list of labels corresponding to the integers returned by the classify function
+
 
     def __init__(self, payoff_matrices, player_frequencies, equilibrium_tolerance=0.1):
         """
@@ -169,6 +171,9 @@ class Game(object):
                     if any(mix):
                         yield mix
 
+
+
+
         # for all players, generate all possible mixes of available strategies that are not dominated strategies
         strategy_permutations = []
         for p_i in range(n_players):
@@ -177,6 +182,7 @@ class Game(object):
 
         product = itertools.product(*strategy_permutations)
         product = list(product)
+        # TODO: filter out any mixes over strategies that have the same payoff for all players
         def mix_over_strategies(s_tuple):
             n = sum(int(x) for x in s_tuple)
             r = numpy.random.dirichlet([1] * n)

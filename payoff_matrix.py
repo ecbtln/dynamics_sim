@@ -1,5 +1,6 @@
 __author__ = 'elubin'
 import numpy
+import logging
 
 
 class PayoffMatrix(object):
@@ -8,6 +9,7 @@ class PayoffMatrix(object):
     convenience methods for getting the payoff for each player given a strategy set, as well as calculating the
     expected payoff given a distribution of players playing each strategy.
     """
+
     def __init__(self, num_players, payoff_matrices):
         self.num_player_types = num_players
 
@@ -144,7 +146,7 @@ class PayoffMatrix(object):
                             continue_iterating = True
                             break
         # (player index, strategy) index set of tuples of dominated strategies
-        self.dominated_strategies = dominated_strategies
+        self.dominated_strategies = set()
 
 
 
@@ -154,7 +156,6 @@ class PayoffMatrix(object):
         # the list is computed in order, by iterating through all the other strategy pairs for all the other players
         # TODO need to ignore payoffs for dominated strategies
         return list(self._get_all_payoffs_helper(p, s, 0, (), dominated))
-
 
     def _get_all_payoffs_helper(self, p, s, cur_p, cur_s, dominated):
         if cur_p == self.num_player_types:
@@ -192,13 +193,15 @@ class PayoffMatrix(object):
 
     def is_mixed_equilibrium(self, s):
         assert self.num_player_types == len(s)
+        logging.debug("testing %s", s)
         for n_i in range(self.num_player_types):
+            logging.debug("player %d", n_i)
             payoffs = []
             for i, s_i in enumerate(s[n_i]):
                 if s_i > 0:
                     # get expected payoff of mixing this strategy
                     payoffs.append((i, self.get_expected_payoff(n_i, i, s)))
-
+            logging.debug("payoffs %s", payoffs)
             if len(payoffs) > 1:
                 for i, (idx_i, p) in enumerate(payoffs):
                     for j, (idx_j, q) in enumerate(payoffs[i:]):
@@ -213,10 +216,12 @@ class PayoffMatrix(object):
                 s_idx = [i for i, x in enumerate(s[n_i]) if s[n_i][i] > 0][0]
 
                 best_payoff = self.get_expected_payoff(n_i, s_idx, s)
+                logging.debug("Best payoff %f", best_payoff)
                 for s_i in range(self.num_strats[n_i]):
                     if s_i == s_idx:
                         continue
                     p = self.get_expected_payoff(n_i, s_i, s)
+                    logging.debug("Strategy %d payoff %f", s_i, p)
                     if p > best_payoff:
                         return False, n_i, s_i  # profitable deviation for player n_i to play s_i instead of s[n_i]
 
