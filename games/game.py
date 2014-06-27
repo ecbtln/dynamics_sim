@@ -5,6 +5,9 @@ from dynamics_sim.util import Obj
 import numpy
 import itertools
 import time
+import tempfile
+import StringIO
+import os
 from dynamics_sim.parallel import par_for, delayed
 import multiprocessing
 
@@ -103,7 +106,6 @@ class Game(object):
         def convert_state(s):
             return [{cls.STRATEGY_LABELS[j][i]: s_i[i] for i in range(len(s_i)) if s_i[i] > 0} for j, s_i in enumerate(s)]
 
-
         false_negatives = []
         false_positives = []
 
@@ -117,32 +119,41 @@ class Game(object):
 
             eq = cls.classify(params, state, tolerance)
             is_eq = g.pm.is_pure_equilibrium(perm)
-            if is_eq:
+            if is_eq == True:
                 if eq == -1:
                     false_negatives.append(state)
-                # assert eq != -1,
             else:
+                profitable_deviation = is_eq
                 if eq != -1:
-                    false_positives.append((state, eq))
+                    false_positives.append((state, eq, profitable_deviation))
 
-                # assert eq == -1,
-                #
-
-
-        def print_results(false_negatives, false_positives):
-
+        def print_results(false_negatives, false_positives, kwargs, num_sims):
+            output = StringIO.StringIO()
+            print >>output, 'Parameters: %s' % kwargs
+            print >>output, 'Total states tried: %d' % num_sims
+            print >>output, "# False negatives: %d" % len(false_negatives)
+            print >>output, "# False positives: %d" % len(false_positives)
             if len(false_negatives) > 0:
-                print "False negatives:"
+                print >>output, "False negatives:"
 
                 for fn in false_negatives:
-                    print "For the parameters (%s), the %s classifier failed to classify the state %s as an equilibrium" % \
-                          (game_kwargs, cls.__class__.__name__, convert_state(fn))
+                    print >>output, convert_state(fn)
 
             if len(false_positives) > 0:
-                print "False positives:"
-                for state, eq in false_positives:
-                    print "For the parameters (%s), the %s classifier classified the state %s as an equilibrium (%s), even though it isn't one" % \
-                        (game_kwargs, g.__class__.__name__, convert_state(state), cls.EQUILIBRIA_LABELS[eq])
+                print >>output, "False positives:"
+                for state, eq, p_dev in false_positives:
+                    first = 'State: %s, Classification: %s. ' % (convert_state(state), cls.EQUILIBRIA_LABELS[eq])
+                    if p_dev[0]:
+                        # mixed strategy deviation
+                        second = 'Profitable deviation: player %d - strategies (%s:%f, %s:%f) don\'t have same exp payoff' % (p_dev[1], cls.STRATEGY_LABELS[p_dev[1]][p_dev[2][0][0]], p_dev[2][0][1], cls.STRATEGY_LABELS[p_dev[1]][p_dev[2][1][0]], p_dev[2][1][1])
+                    else:
+                        # pure strategy deviation
+                        second = 'Profitable deviation: player %d - %s' % (p_dev[1], cls.STRATEGY_LABELS[p_dev[1]][p_dev[2]])
+                    print >>output, first + second
+            fd, name = tempfile.mkstemp(suffix='.txt')
+            os.write(fd, output.getvalue())
+            os.close(fd)
+            return name
 
         def generate_strat_mixins(n_strats, p_i, prefix):
             if len(prefix) == n_strats:
@@ -164,8 +175,8 @@ class Game(object):
             n_strats = g.pm.num_strats[p_i]
             strategy_permutations.append(list(generate_strat_mixins(n_strats, p_i, ())))
 
-        prod = itertools.product(*strategy_permutations)
-
+        product = itertools.product(*strategy_permutations)
+        product = list(product)
         def mix_over_strategies(s_tuple):
             n = sum(int(x) for x in s_tuple)
             r = numpy.random.dirichlet([1] * n)
@@ -190,9 +201,11 @@ class Game(object):
                 return time.time() - start > timeout
 
         def do_work():
+            permutations = 0
             while not should_end():
                 for i in range(ATTEMPTS_PER_PERMUTATION):
-                    for perm in prod:
+                    for perm in product:
+                        permutations += 1
                         # if none are mixed strategies, then skip
                         mixed = False
                         for s_tuple in perm:
@@ -207,20 +220,21 @@ class Game(object):
 
                         eq = cls.classify(params, state, tolerance)
                         is_eq = g.pm.is_mixed_equilibrium(state)
-                        if is_eq:
+                        if is_eq == True:
                             if eq == -1:
                                 false_negatives.append(state)
-                            # assert eq != -1,  "For the parameters (%s), the %s classifier failed to classify the state %s as " \
-                            #                   "an equilibrium" % (game_kwargs, cls.__class__, convert_state(state))
                         else:
+                            profitable_deviation = is_eq
                             if eq != -1:
-                                false_positives.append((state, eq))
-                            # assert eq == -1, "For the parameters (%s), the %s classifier classified the state %s as " \
-                            #                  "an equilibrium (%s), even though it isn't one" % (game_kwargs, g.__class__.__name__, convert_state(state), cls.EQUILIBRIA_LABELS[eq])
+                                false_positives.append((state, eq, profitable_deviation))
 
-        do_work()
+            return permutations
+        num_sims = do_work()
 
-        print_results(false_negatives, false_positives)
+
+
+        output_file = print_results(false_negatives, false_positives, game_kwargs, num_sims)
+        print 'Saved results to file: %s' % output_file
         #par_for()(delayed(do_work)() for _ in range(multiprocessing.cpu_count()))
 
 

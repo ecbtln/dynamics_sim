@@ -184,12 +184,7 @@ class PayoffMatrix(object):
                 strategies[n_i] = s_i
                 p = self.get_payoff(n_i, *strategies)
                 if p > best_payoff:
-                    # print 'Testing if ' + str(s) + ' is a pure equilibrium'
-                    # print 'Player %d' % n_i
-                    # print 'Current payoff: %f' % best_payoff
-                    # print 'Can get payoff %f by switching to strategy %d' % (p, s_i)
-                    # print self.payoff_matrices
-                    return False
+                    return False, n_i, s_i  # profitable deviation for player n_i to play s_i instead of s[n_i]
 
             strategies[n_i] = s[n_i]
 
@@ -202,13 +197,14 @@ class PayoffMatrix(object):
             for i, s_i in enumerate(s[n_i]):
                 if s_i > 0:
                     # get expected payoff of mixing this strategy
-                    payoffs.append(self.get_expected_payoff(n_i, i, s))
+                    payoffs.append((i, self.get_expected_payoff(n_i, i, s)))
 
             if len(payoffs) > 1:
-                first = payoffs[0]
-                for p in payoffs[1:]:
-                    if abs(p - first) > (1e-08 + 1e-05 * abs(first)):
-                        return False
+                for i, (idx_i, p) in enumerate(payoffs):
+                    for j, (idx_j, q) in enumerate(payoffs[i:]):
+                        if abs(q - p) > (1e-08 + 1e-05 * abs(p)):
+                            return True, n_i, ((idx_i, p), (idx_j, q))
+
             else:
                 # only one strategy, this is pure equilibrium
                 # check to make sure there's no incentive of switching strategies
@@ -222,8 +218,6 @@ class PayoffMatrix(object):
                         continue
                     p = self.get_expected_payoff(n_i, s_i, s)
                     if p > best_payoff:
-                        # print n_i, s_i
-                        # print s
-                        # print p
-                        # print self.payoff_matrices
-                        return False
+                        return False, n_i, s_i  # profitable deviation for player n_i to play s_i instead of s[n_i]
+
+        return True
